@@ -1,6 +1,14 @@
 #PartyChecker
 
 
+#### Distribution
+
+I allow to this work to be modified for anyone's need or purpous.
+However, if said modification is to be published, I ask to be credited for my original work.
+
+Thank you.
+
+
 
 #### About
 
@@ -25,9 +33,11 @@ When *PartyChecker.lua* is loaded, it allocates a global object `PartyChecker`. 
 
 ###### Functions
 
-- `PartyChecker.getParty(player)` : takes a player (`player_t`) has argument. Returns an integer that is equal to 0 if player not in a party, otherwise the integer is formated as such: if *player* is in the same party as the player number 1 (player at index 1 in *players*), then first bit is 1, 0 otherwise; if *player* is in the same party as the player number 2, the second bit of the integer is 1, 0 otherwise; etc. up to player/bit number 16.
+- `PartyChecker.getParty(player)` : takes a player (`player_t`) as argument. Returns an integer that is equal to 0 if player not in a party, otherwise the integer is formated as such: if *player* is in the same party as the player number 1 (player at index 1 in *players*), then first bit is 1, 0 otherwise; if *player* is in the same party as the player number 2, the second bit of the integer is 1, 0 otherwise; etc. up to player/bit number 16. This includes himself, meaning that if said player is player number *k*, then the k-th bit will be set to 1 (except if player not in a party to begin with, ofc).
 
-- `PartyChecker.isInParty(player)` : takes a player (`player_t`) has argument. Returns wether or not this player is in a party.
+- `PartyChecker.isInParty(player)` : takes a player (`player_t`) as argument. Returns a boolean wether or not this player is in a party.
 
-- `PartyChecker.isWaitingPartyCheck(player)`:
+- `PartyChecker.isWaitingPartyCheck(player)` : takes a player (`player_t`) as argument. Returns a boolean not this player has been "party checker" (i.e.: already verified that he is the member of a splitscreen party or not)
+
+- `PartyChecker.getPartyPlayers(player)` : takes a player (`player_t`) as argument. Returns a table that contains all the players that are in the same splitscreen party has this player (including himself). If said player is not in a party, it will return an empty table
 
