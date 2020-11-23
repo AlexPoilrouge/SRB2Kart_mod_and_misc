@@ -62,7 +62,7 @@ This script provides the following commands:
 
 ### Race mode only
 
-As of now, "*First to X*" script, is race mode only. Due to the simple fact that I haven't really played SRB2Kart's battle mode, and have no real clue what it' about.
+As of now, "*First to X*" script, is race mode only. Due to the simple fact that I haven't really played SRB2Kart's battle mode, and have no real clue what it's about.
 
 ### Combiring and Elimination
 
@@ -76,7 +76,7 @@ Appart from the main/first player, the other players don't have access to consol
 
 This is why, splitscreen isn't supported (meaning players other than the "party leader" can't join an ongoing "*First to X*" round)… by default.
 
-#### PartyChecker workaround script
+##### PartyChecker workaround script
 
 In light of this, I have written an experimental [workaround script](https://github.com/AlexPoilrouge/SRB2Kart_mod_and_misc/tree/master/scripts/PartyChecker).
 
