@@ -2,7 +2,7 @@
 -- "PARTYCHECKER"
 -- original Utility Script by Dr_Nope
 -- (contact me on Discord: Dr_Nope#0037)
--- last mod. 2020-11-20
+-- last mod. 2020-11-23
 --
 -- You are free to use, repack, and modify it.
 -- If you do modify it and publish your mods,
@@ -68,16 +68,21 @@ rawset(_G, "PartyChecker",
 -- As previously, "party bits" is an integer where, if player 1 is in party then 1 bit is one,
 -- if p2 is in party the bit n.2 is 1, etc.
 COM_AddCommand("_pc_partysumbit", function(player, partyFlag)
-    -- if the player is no longer in "party check" waiting state, do nothing
-    if (not PartyChecker.isWaitingPartyCheck(player)) then return end
     -- if the party flag in not given, or 0, then it is considered that this means
-    -- that the player has not party
+    -- that the player has no party
+    -- also if a player can call this command, this means he's either a party leader,
+    -- either non in a party. Therefore if he calls the command with the no party flag,
+    -- flag him as checked (this potentially counteracts fake inclusions from 
+    -- '_pc_partysubmit' by other players call)
     if (partyFlag=="0") or (partyFlag==nil) then
         -- "party checking" has been done
         player.party_flags= PC_FLAGS.PARTY_CHECKED
 
         return
     end
+
+    -- if the player is no longer in "party check" waiting state, do nothing
+    if (not PartyChecker.isWaitingPartyCheck(player)) then return end
 
     local n_partyFlag= tonumber(partyFlag)
     if not n_partyFlag then return end
