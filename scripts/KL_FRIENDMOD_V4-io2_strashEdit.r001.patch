@@ -1,0 +1,23 @@
+diff -ur KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua
+--- KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua	2020-11-27 23:46:48.000000000 +0100
++++ KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua	2021-04-13 12:36:27.672554704 +0200
+@@ -2251,4 +2251,17 @@
+ 
+ rawset(_G, "FRIENDMOD_CheckTeams", function(...)
+ 	return fr_enabled.value
+-end)
+\ Pas de fin de ligne à la fin du fichier
++end)
++
++
++--- [strashEdit] ---
++--- allowing external script to check for scores
++--- and for players team belonging
++rawset(_G, "FRIENDMOD_GetScores", function(...)
++	return finalrecalc, bluescore, orangescore, bossmode
++end)
++
++rawset(_G, "FRIENDMOD_GetPlayersTeam", function(p)
++	return p.FRteam
++end)
++--- ---

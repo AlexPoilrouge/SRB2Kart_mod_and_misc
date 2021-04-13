@@ -58,6 +58,8 @@ local _callTimer=0
 local elimIsPlayed= false
 -- local var used to inform the script if combiring mode is enabled in ongoing race
 local combiIsPlayed= false
+-- [strashEdit] local var used to inform the script if friend mode is enabled in ongoing race
+local friendIsPlayed= false
 
 -- function used to start (as a given player) a "FT N" round (arg=N),
 -- or stop the ongoing one (arg=0)
@@ -415,11 +417,28 @@ addHook("ThinkFrame", do
         local winners= {}
         local _skip= false
         -- if more than 1 "FT N" contester was in race
+        local recalced, bluescore, orangescore, bossmode= FRIENDMOD_GetScores()
+        local fr_teamstied= (bossmode and bluescore==1) or (bluescore==orangescore)
         if contesters > 1 then
             -- we look the time of each player and put the best players in table 'winners'
             -- ( winners is in table in case of ties, and so can have multiple winners)
             for p in players.iterate do
-                if (not p.spectator) and ((realtime_min<0) or (p.realtime<=realtime_min)) and not (p.pflags & PF_TIMEOVER) then
+                if friendIsPlayed then
+                    local pteam= FRIENDMOD_GetPlayersTeam(p)
+                    local teamwins= recalced and (
+                        ( bossmode and (bluescore==1 or
+                                (pteam==1 and bluescore>0) or
+                                (pteam==2 and bluescore==0)
+                            )
+                        ) or (
+                            (pteam==1 and bluescore > orangescore) or
+                            (pteam==2 and orangescore > bluescore)
+                        )
+                    )
+                    if teamwins or fr_teamstied then
+                        table.insert(winners, p)
+                    end
+                elseif (not p.spectator) and ((realtime_min<0) or (p.realtime<=realtime_min)) and not (p.pflags & PF_TIMEOVER) then
                     if (p.ft_wins ~= nil) then
                         -- in case two contesters make a tie
                         if p.realtime==realtime_min then
@@ -434,7 +453,8 @@ addHook("ThinkFrame", do
             end
             
             -- canceling winners in there is not absolute winners among contesters (while option 'ft_absolute_winner' is disabled)
-            if (constesters_rt_min<0) or ((not combiIsPlayed) and _ft_abs_win.value and (constesters_rt_min>realtime_min)) then
+            -- ([strashEdit] also accounting for friend mode)
+            if (constesters_rt_min<0) or ((not combiIsPlayed) and (not friendIsPlayed) and _ft_abs_win.value and (constesters_rt_min>realtime_min)) then
                 winners= {}
             end
         -- if there was only one contester in the race, we end the 'FT N' round (unless said constester, has no win yet)
@@ -465,8 +485,9 @@ addHook("ThinkFrame", do
 
         -- if there are several winners, and ties are not allowed
         -- (or ties not allowed with more than 2 winners in combiring),
+        -- ([strashEdit] ties are de facto allowed in team mode)
         -- we skip don't do anything more: not counting any win
-        if (#winners > 1) and (not _ft_allow_ties.value) and ((not combiIsPlayed) or ((#winners>2))) then
+        if (#winners > 1) and (not _ft_allow_ties.value) and ((not combiIsPlayed) or ((#winners>2)) and (not friendIsPlayed or fr_teamstied)) then
             print("[FirstTo"..firstTo.."] Ties DON'T COUNT as several winners :/")
         -- if there was an appropriate number of winner
         elseif #winners > 0 then
@@ -743,6 +764,8 @@ addHook("MapLoad", function(mapnum)
     elimIsPlayed= (_el_enabled and _el_enabled.value)
     -- is this race gonna be in combiring mode?
     combiIsPlayed= (_combi_enabled and _combi_enabled.value)
+    -- [strashEdit] is this race gonna be in friend mode?
+    friendIsPlayed= FRIENDMOD_CheckTeams and true or false
 end)
 
 -- "NetVars" hook: https://wiki.srb2.org/wiki/Lua/Hooks#MapLoad
@@ -756,7 +779,7 @@ addHook("NetVars", function(net)
     
     elimIsPlayed= net($)
     combiIsPlayed= net($)
-end)
+    friendIsPlayed= net($)
 
 -- "PlayerMsg" hook: https://wiki.srb2.org/wiki/Lua/Hooks#PlayerMsg
 -- syntax sugar via chat
