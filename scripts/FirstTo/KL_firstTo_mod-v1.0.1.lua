@@ -416,13 +416,15 @@ addHook("ThinkFrame", do
         local constesters_rt_min= -1
         local winners= {}
         local _skip= false
-        -- if more than 1 "FT N" contester was in race
+        --- [strashEdit] handling friendMod
         local recalced, bluescore, orangescore, bossmode= FRIENDMOD_GetScores()
         local fr_teamstied= (bossmode and bluescore==1) or (bluescore==orangescore)
+        -- if more than 1 "FT N" contester was in race
         if contesters > 1 then
             -- we look the time of each player and put the best players in table 'winners'
             -- ( winners is in table in case of ties, and so can have multiple winners)
             for p in players.iterate do
+                -- [strashEdit] friendMod played
                 if friendIsPlayed then
                     local pteam= FRIENDMOD_GetPlayersTeam(p)
                     local teamwins= recalced and (
@@ -485,8 +487,8 @@ addHook("ThinkFrame", do
 
         -- if there are several winners, and ties are not allowed
         -- (or ties not allowed with more than 2 winners in combiring),
-        -- ([strashEdit] ties are de facto allowed in team mode)
         -- we skip don't do anything more: not counting any win
+        -- ([strashEdit] + friendMod)
         if (#winners > 1) and (not _ft_allow_ties.value) and ((not combiIsPlayed) or ((#winners>2)) and (not friendIsPlayed or fr_teamstied)) then
             print("[FirstTo"..firstTo.."] Ties DON'T COUNT as several winners :/")
         -- if there was an appropriate number of winner
