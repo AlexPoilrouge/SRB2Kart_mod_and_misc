@@ -1,7 +1,71 @@
 diff -ur KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua
 --- KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua	2020-11-27 23:46:48.000000000 +0100
-+++ KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua	2021-04-13 12:36:27.672554704 +0200
-@@ -2251,4 +2251,17 @@
++++ KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua	2021-04-21 00:11:13.152050916 +0200
+@@ -420,6 +420,9 @@
+ local savedtheworld = nil -- should we do special celebrations for 1 player beating a boss, or leader bonus deciding a normal teams game?
+ local restorecolors = true -- have we written colors back to teams-mode players during intermission yet? (gotta preserve personal colors for mixed games)
+ 
++-- [strashEdit]
++local doHUDstuff= true
++
+ -- just in case.
+ local function sanitizebossname(s)
+ 	return s:gsub("%W", "")
+@@ -1721,7 +1724,7 @@
+ 				if not supervalid(p) then
+ 					continue
+ 				end
+-				if p.FRteam == 2 and not (p.pflags & PF_TIMEOVER) then
++				if p.FRteam == 2 and (not (p.pflags & PF_TIMEOVER)) and not (Elimination and Elimination()) then
+ 					FRlog(p, "blue blowout die")
+ 					welcometofuckingdie(p)
+ 				end
+@@ -1734,7 +1737,7 @@
+ 				if not supervalid(p) then
+ 					continue
+ 				end
+-				if p.FRteam == 1 and not (p.pflags & PF_TIMEOVER) then
++				if p.FRteam == 1 and (not (p.pflags & PF_TIMEOVER)) and not (Elimination and Elimination()) then
+ 					FRlog(p, "orange blowout die")
+ 					welcometofuckingdie(p)
+ 				end
+@@ -1854,6 +1857,7 @@
+ 			FRlog(p, "doing allfinish iterator")
+ 			if p.exiting == 99 and not p.FRstasis then
+ 				FRlog(p, "Detonate handler")
++				print("Detonate handler "..p.name)
+ 				p.FRstasis = 5 * TICRATE - 2
+ 			end
+ 			if p.FRstasis == nil then
+@@ -1916,6 +1920,10 @@
+ 	if (countactive() < 2 and not fr_debug.value) then
+ 		return
+ 	end
++
++	-- [strashEdit]
++	if not doHUDstuff return end
++	
+ 	if not doteamstuff
+ 		if leveltime < (6 * TICRATE + (3 * TICRATE / 4)) then
+ 			local ffaflag = 0
+@@ -2106,11 +2114,15 @@
+ 		elseif not p.spectator and p.FRexiting != 1 -- shhh. no tears.
+ 			local sortedplayers = {}
+ 			for q in players.iterate
+-				if q.mo and not q.spectator and q.FRready and not (q.pflags & PF_TIMEOVER) and q.realtime <= bossplayer.realtime and q.FRteam == 1 then
++				-- if q.mo and not q.spectator and q.FRready and not (q.pflags & PF_TIMEOVER) and q.realtime <= bossplayer.realtime and q.FRteam == 1 then
++				if q.mo and not q.spectator and q.FRready then
+ 					table.insert(sortedplayers, q)
+ 				end
+ 			end
+ 			table.sort(sortedplayers, function(a, b)
++				if(a.FRteam~=b.FRteam) then
++					return a.FRteam==1
++				end
+ 				return a.realtime < b.realtime
+ 			end)
+ 			for _, q in ipairs(sortedplayers)
+@@ -2251,4 +2263,38 @@
  
  rawset(_G, "FRIENDMOD_CheckTeams", function(...)
  	return fr_enabled.value
@@ -13,11 +77,32 @@ diff -ur KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
 +--- [strashEdit] ---
 +--- allowing external script to check for scores
 +--- and for players team belonging
-+rawset(_G, "FRIENDMOD_GetScores", function(...)
-+	return finalrecalc, bluescore, orangescore, bossmode
++
++-- used originaly by NRJV's elimination and therefor the
++-- strashbot's tweaked version
++rawset(_G, "FRIENDMOD_TeamBattle", function(...)
++	return doteamstuff
 +end)
 +
-+rawset(_G, "FRIENDMOD_GetPlayersTeam", function(p)
-+	return p.FRteam
++rawset(_G, "FRIENDMOD_GetScores", function(...)
++	return finalrecalc, bluescore, orangescore, bossplayer, savedtheworld, blueprefix() ,orangeprefix()
++end)
++
++rawset(_G, "FRIENDMOD_GetPlayersData", function(p)
++	return {
++		FRteam= p.FRteam,
++		personalscore= p.personalscore,
++		FRready= p.FRready,
++		teamPrefix= teamprefix(p)
++	}
++end)
++
++rawset(_G, "FRIENDMOD_ToggleHUDstuff", function(b)
++	if (b==nil) then 
++		doHUDstuff= not doHUDstuff
++	else
++		doHUDstuff= b
++	end
++	return doHUDstuff
 +end)
 +--- ---

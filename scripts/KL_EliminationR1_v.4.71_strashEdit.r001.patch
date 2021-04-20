@@ -1,0 +1,330 @@
+
+
+2021-04-21 01:12 diff -ul KL_EliminationR1_NVJR_v4.71/LUA_EL.txt KL_EliminationR1_v.4.71_strashEdit/LUA_EL.txt Page 1
+
+
+--- KL_EliminationR1_NVJR_v4.71/LUA_EL.txt	2021-04-21 01:11:14.557751768 +0200
++++ KL_EliminationR1_v.4.71_strashEdit/LUA_EL.txt	2021-04-21 01:10:58.914706448 +0200
+@@ -487,7 +487,76 @@
+ 		if s == "%n" then s = elim.diedName end
+ 		drawStringMkII(tsx, realtsy, string.upper(s), FONT_KART2, V_SNAPTOTOP|V_40TRANS, {align="center",color=SKINCOLOR_BROWN})
+ 	end
+-end
++end
++
++
++
++
++
++-- [ strashEdit ] --
++-- just factoring this part
++local function _respawnEliminatedPlayer(p)
++	if p.elim_rejoinEnd and p.spectator then
++		p.spectator = false
++		if p.pflags&PF_WANTSTOJOIN then
++			p.pflags = p.pflags^^PF_WANTSTOJOIN
++		end
++	end
++end
++
++local function _respawnEliminatedPlayers()
++	for p in players.iterate do
++		_respawnEliminatedPlayer(p)
++	end
++end
++
++-- for the mods that end the round themselves because they need to display something
++-- at the end of the race or whatever
++local function _endElimRound()
++	COM_BufInsertText(server, "allowteamchange 1")
++	//chatprint("\x83<SERVER> End of round! Team change is now allowed.")
++	local place = 0 //place they finished (but actually the minutes displayed in realtime
++	local minutes = 0 //minutes they survived (but actually the seconds displayed in realtime
++	local seconds = 0 //seconds survived (but actually the centiseconds displayed in realtime
++	for p in players.iterate do //oh my god this is a hack				
++		if p.eliminatedtime and p.eliminatedpos then //basically we are calculating time survived
++			place = TICRATE*60*p.eliminatedpos //but because of results screen im going to force these numbers to play nice
++			minutes = p.eliminatedtime/(60*TICRATE)
++			seconds = (p.eliminatedtime-(minutes*60*TICRATE))/TICRATE
++			//seconds = (p.eliminatedtime-(p.eliminatedtime/(60*TICRATE)))/100
++			//print("DEBUG: place: " + place + " / minutes: " + minutes + " / seconds: " + seconds)
++		else //they weren't eliminated or something went wrong
++			place = TICRATE*60 //more than likely they are the winner
++			minutes = p.realtime/(60*TICRATE)
++			seconds = (p.realtime-(minutes*60*TICRATE))/TICRATE					
++		end
++		p.realtime = place+(minutes*TICRATE)+(seconds*TICRATE/100)
++		if not p.spectator then
++			chatprint("\x83<SERVER> "..p.name.." survived!")
++		end
++		//if p.eliminatedtime then p.realtime = p.eliminatedtime end
++		//if p.eliminatedpos then p.kartstuff[k_position] = p.eliminatedpos end
+
+
+
+
+
+
+
+2021-04-21 01:12 diff -ul KL_EliminationR1_NVJR_v4.71/LUA_EL.txt KL_EliminationR1_v.4.71_strashEdit/LUA_EL.txt Page 2
+
+
++	end
++	G_ExitLevel()
++	for p in players.iterate do if p.valid
++		S_StopMusic(p)
++		if p.exiting or (p.eliminatedpos and p.eliminatedpos <= 3) then
++			S_ChangeMusic("ELWIN", true, p)
++			//print(p.name.." playing KROK (placed "..p.eliminatedpos..")")
++		elseif p.eliminatedpos <= elim.startpcount/2 //tophalf
++			S_ChangeMusic("ELOK", true, p)
++			//print(p.name.." playing RACENT (placed "..p.eliminatedpos..")")
++		else
++			S_ChangeMusic("ELLOSE", true, p)
++			//print(p.name.." playing KRLOSE (placed "..p.eliminatedpos..")")
++		end
++		-- [ strashEdit ]
++		-- this part has been factored
++		_respawnEliminatedPlayer(p)
++		--
++	end end
++end
++-- --
+ 
+ 
+ COM_AddCommand("forcewin", function()
+@@ -542,7 +611,13 @@
+ 			COM_BufInsertText(server, "basenumlaps \034Map Default\034")
+ 		end
+ 		COM_BufInsertText(server, "allowteamchange 1")
+-	end
++	end
++	
++	-- [ strashEdit ] --
++	-- incase of external 'exitlevel' call
++	_respawnEliminatedPlayers()
++	--
++	
+ 	if not el_scorereport.value then return end
+ 	local roundnum = "???"
+ 	if server.roundnumber then roundnum = server.roundnumber end
+@@ -600,7 +675,7 @@
+ 	for p in players.iterate do if p and p.valid then
+ 		if not p.spectator then playercount = $+1 end
+ 	end end
+-	if el_enabled.value == 1 then elim.on = true end
++	if el_enabled.value then elim.on = true end
+ 	if el_minplayers.value != 0 then
+ 		if playercount < el_minplayers.value then
+ 			elim.on = false
+@@ -635,7 +710,8 @@
+ 		p.elimlastmanannounce = 0 //timer for LAST MAN STANDING message
+ 		p.elimlastmanodds = 0 //how many players you're up against when solo, used to determine how clutch you are LMAO DIDNT FINISH YET ASKDGHASKGFH
+ 	end
+-end)
++end)
++
+ 
+
+
+
+
+
+
+
+2021-04-21 01:12 diff -ul KL_EliminationR1_NVJR_v4.71/LUA_EL.txt KL_EliminationR1_v.4.71_strashEdit/LUA_EL.txt Page 3
+
+
+ addHook("ThinkFrame", function() if elim.on and leveltime > 2 then // START THINKFRAME ---------------------------------------
+ //print("===lmao el_timescaled*ticrate is "+elim.el_timescaled*TICRATE)
+@@ -863,51 +939,11 @@
+ 		end
+ 		// elim_win is true and X seconds passed (for the music to play) after a win?
+ 		// End the level already, also play cute sounds
+-		if elim.wintimer > 10*TICRATE then
+-			COM_BufInsertText(server, "allowteamchange 1")
+-			//chatprint("\x83<SERVER> End of round! Team change is now allowed.")
+-			local place = 0 //place they finished (but actually the minutes displayed in realtime
+-			local minutes = 0 //minutes they survived (but actually the seconds displayed in realtime
+-			local seconds = 0 //seconds survived (but actually the centiseconds displayed in realtime
+-			for p in players.iterate do //oh my god this is a hack				
+-				if p.eliminatedtime and p.eliminatedpos then //basically we are calculating time survived
+-					place = TICRATE*60*p.eliminatedpos //but because of results screen im going to force these numbers to play nice
+-					minutes = p.eliminatedtime/(60*TICRATE)
+-					seconds = (p.eliminatedtime-(minutes*60*TICRATE))/TICRATE
+-					//seconds = (p.eliminatedtime-(p.eliminatedtime/(60*TICRATE)))/100
+-					//print("DEBUG: place: " + place + " / minutes: " + minutes + " / seconds: " + seconds)
+-				else //they weren't eliminated or something went wrong
+-					place = TICRATE*60 //more than likely they are the winner
+-					minutes = p.realtime/(60*TICRATE)
+-					seconds = (p.realtime-(minutes*60*TICRATE))/TICRATE					
+-				end
+-				p.realtime = place+(minutes*TICRATE)+(seconds*TICRATE/100)
+-				if not p.spectator then
+-					chatprint("\x83<SERVER> "..p.name.." survived!")
+-				end
+-				//if p.eliminatedtime then p.realtime = p.eliminatedtime end
+-				//if p.eliminatedpos then p.kartstuff[k_position] = p.eliminatedpos end
+-			end
+-			G_ExitLevel()
+-			for p in players.iterate do if p.valid
+-				S_StopMusic(p)
+-				if p.exiting or (p.eliminatedpos and p.eliminatedpos <= 3) then
+-					S_ChangeMusic("ELWIN", true, p)
+-					//print(p.name.." playing KROK (placed "..p.eliminatedpos..")")
+-				elseif p.eliminatedpos <= elim.startpcount/2 //tophalf
+-					S_ChangeMusic("ELOK", true, p)
+-					//print(p.name.." playing RACENT (placed "..p.eliminatedpos..")")
+-				else
+-					S_ChangeMusic("ELLOSE", true, p)
+-					//print(p.name.." playing KRLOSE (placed "..p.eliminatedpos..")")
+-				end
+-				if p.elim_rejoinEnd then
+-					p.spectator = false
+-					if p.pflags&PF_WANTSTOJOIN then
+-						p.pflags = p.pflags^^PF_WANTSTOJOIN
+-					end
+-				end
+-			end end
++		if elim.wintimer > 10*TICRATE then
++			-- [ strashEdit ] --
++			-- factorized this part for compatibility
++			_endElimRound()
++			-- --
+
+
+
+
+
+
+
+2021-04-21 01:12 diff -ul KL_EliminationR1_NVJR_v4.71/LUA_EL.txt KL_EliminationR1_v.4.71_strashEdit/LUA_EL.txt Page 4
+
+
+ 		end
+ 	end
+ end
+@@ -1162,6 +1198,15 @@
+ end
+ end, "game")
+ 
+-rawset(_G, "Elimination", function(...) //lets other scripts tell if elimination is running
+-	return elim.on
+-end)
+\ Pas de fin de ligne à la fin du fichier
++rawset(_G, "Elimination", function(...) //lets other scripts tell if elimination is running
++	return elim.on
++end)
++
++
++-- [ strashEdit ]
++-- for outside scripts that may call 'G_Exitlevel' or 'exitlevel' by themselves
++-- so that they can respawn back eliminated players
++rawset(_G, "Elim_respawnEliminatedPlayers", _respawnEliminatedPlayers)
++rawset(_G, "Elim_endWinRound", _endElimRound)
++-- --
++	
+\ Pas de fin de ligne à la fin du fichier
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2021-04-21 01:12 diff -ul KL_EliminationR1_NVJR_v4.71/README.txt KL_EliminationR1_v.4.71_strashEdit/README.txt Page 1
+
+
+--- KL_EliminationR1_NVJR_v4.71/README.txt	2021-04-21 01:11:22.034281468 +0200
++++ KL_EliminationR1_v.4.71_strashEdit/README.txt	2021-04-21 01:11:04.244608094 +0200
+@@ -1,3 +1,14 @@
++=== STRASHBOT EDIT ===
++this version is a tweaked version, by Dr_Nope#0037 of
++KL_EliminationR1_NJVR_v4.71
++that was modified whith freeman's authorization
++to fix an issue of eliminated players not
++respawning when 'exitlevel' is called (or analog situations)
++as well as minor tweaks in 'LUA_EL' for mod compatibility
++reasons (search for 'StrashEdit' in source file)
++=== ===
++
++
+ elimination changelog by freeman (last update 2/12/2021)
+ original work by Amperbee aka Rapidgame7#1949
+ that version is KL_EliminationR1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

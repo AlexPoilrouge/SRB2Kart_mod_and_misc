@@ -60,6 +60,7 @@ local elimIsPlayed= false
 local combiIsPlayed= false
 -- [strashEdit] local var used to inform the script if friend mode is enabled in ongoing race
 local friendIsPlayed= false
+local _friendHUD= true
 
 -- function used to start (as a given player) a "FT N" round (arg=N),
 -- or stop the ongoing one (arg=0)
@@ -375,7 +376,7 @@ addHook("ThinkFrame", do
         -- except if game's aborted, trying to block the 'exitlevel' countdown
         -- eventhough, that's not always possible because sometimes,
         -- 'exitcountdown' just says "fuck you" apparently...
-        if (not aborting) and (p.exiting) then p.exiting = 8 end
+        if (not aborting) and (p.exiting) or (p.pflags & PF_TIMEOVER) then p.exiting = 99 end
         
         if not p.spectator then
             totalPlayers = $+1
@@ -386,7 +387,9 @@ addHook("ThinkFrame", do
         -- detect players who are "finished"
         -- player with the minimum 'realtime' is the one who won the race
         -- thanks to Tyron on KartKrew's discord for his help
-        if (p.exiting and p.exiting == 8) or (p.pflags & PF_TIMEOVER) then
+        
+        if (p.exiting and p.exiting == 99) or (p.pflags & PF_TIMEOVER) then
+        -- if (p.exiting) or (p.pflags & PF_TIMEOVER) then
             -- in elimination mode, spectator are also potential players so...
             if (not p.spectator) or elimIsPlayed then
                 everyonesDone = $+1
@@ -416,9 +419,34 @@ addHook("ThinkFrame", do
         local constesters_rt_min= -1
         local winners= {}
         local _skip= false
+        local fr_teamstied= false
         --- [strashEdit] handling friendMod
-        local recalced, bluescore, orangescore, bossmode= FRIENDMOD_GetScores()
-        local fr_teamstied= (bossmode and bluescore==1) or (bluescore==orangescore)
+        local recalced, bluescore, orangescore, bossplayer, savedtheworld= nil, nil, nil, nil, nil
+        if friendIsPlayed then
+            -- [strashbot] FriendMod and FirstToMod cohabitation
+            -- needs a modified version of friendsMod
+            -- fetching useful info to determine round winners
+            recalced, bluescore, orangescore, bossplayer, savedtheworld= FRIENDMOD_GetScores()
+            
+            fr_teamstied= (bossplayer and bluescore==1) or (bluescore==orangescore)
+            -- [strashbot] if FriendMod + Elim there can't be a teams tie
+            if elimIsPlayed and fr_teamstied then
+                for p in players.iterate do
+                    p.FRdata= FRIENDMOD_GetPlayersData(p)
+                    if not p.spectator then
+                        if(p.FRdata.FRteam==1) then
+                            bluescore= 10
+                            orangescore= 0
+                        else
+                            orangescore= 10
+                            bluescore= 0
+                        end
+                        fr_teamstied= false
+                        break
+                    end
+                end
+            end
+        end
         -- if more than 1 "FT N" contester was in race
         if contesters > 1 then
             -- we look the time of each player and put the best players in table 'winners'
@@ -426,15 +454,19 @@ addHook("ThinkFrame", do
             for p in players.iterate do
                 -- [strashEdit] friendMod played
                 if friendIsPlayed then
-                    local pteam= FRIENDMOD_GetPlayersTeam(p)
-                    local teamwins= recalced and (
-                        ( bossmode and (bluescore==1 or
-                                (pteam==1 and bluescore>0) or
-                                (pteam==2 and bluescore==0)
+                    -- [strashbot] FriendMod and FirstToMod cohabitation
+                    -- needs a modified version of friendsMod
+                    -- fetching needed players info to determine round winners
+                    p.FRdata= FRIENDMOD_GetPlayersData(p)
+                    
+                    local teamwins= (
+                        ( bossplayer and (bluescore==1 or
+                                (p.FRdata.FRteam==1 and bluescore>0) or
+                                (p.FRdata.FRteam==2 and bluescore==0)
                             )
                         ) or (
-                            (pteam==1 and bluescore > orangescore) or
-                            (pteam==2 and orangescore > bluescore)
+                            (p.FRdata.FRteam==1 and bluescore > orangescore) or
+                            (p.FRdata.FRteam==2 and orangescore > bluescore)
                         )
                     )
                     if teamwins or fr_teamstied then
@@ -456,7 +488,7 @@ addHook("ThinkFrame", do
             
             -- canceling winners in there is not absolute winners among contesters (while option 'ft_absolute_winner' is disabled)
             -- ([strashEdit] also accounting for friend mode)
-            if (constesters_rt_min<0) or ((not combiIsPlayed) and (not friendIsPlayed) and _ft_abs_win.value and (constesters_rt_min>realtime_min)) then
+            if (not friendIsPlayed) and ( (constesters_rt_min<0) or ((not combiIsPlayed) and _ft_abs_win.value and (constesters_rt_min>realtime_min)) ) then
                 winners= {}
             end
         -- if there was only one contester in the race, we end the 'FT N' round (unless said constester, has no win yet)
@@ -489,12 +521,17 @@ addHook("ThinkFrame", do
         -- (or ties not allowed with more than 2 winners in combiring),
         -- we skip don't do anything more: not counting any win
         -- ([strashEdit] + friendMod)
-        if (#winners > 1) and (not _ft_allow_ties.value) and ((not combiIsPlayed) or ((#winners>2)) and (not friendIsPlayed or fr_teamstied)) then
-            print("[FirstTo"..firstTo.."] Ties DON'T COUNT as several winners :/")
+        if (#winners > 1) and (not _ft_allow_ties.value) and ((not combiIsPlayed) or (#winners>2)) and ((not friendIsPlayed) or fr_teamstied) then
+            print("[FirstTo"..firstTo.."] Ties DON'T COUNT as several winners :/"..(fr_teamstied and " (fr_teamstied)" or "(nah)"))
         -- if there was an appropriate number of winner
         elseif #winners > 0 then
             -- we flag all the winners
-            local n= (_ft_allow_ties.value) and (#winners) or (combiIsPlayed and 2 or 1)
+            local n= (_ft_allow_ties.value) and (#winners) or
+                (combiIsPlayed and 2 or
+                    ((friendIsPlayed and (not fr_teamstied)) and (#winners) or
+                        1
+                    )
+                )
             for i=1, n do
                 if i>#winners then break end
                 winners[i].ft_wins= $+1
@@ -529,19 +566,59 @@ addHook("ThinkFrame", do
             _playSfx= false
         end
 
-        -- at the end of the 'finish_timer'
-        if (server.first_to.finishTimer > FT_SCORESCREEN_DURATION) or (exitcountdown==1) then
-            -- checking if there is a round winner, if so, stopping round, cleaning up
-            if server.first_to.winner then
-                for p in players.iterate do
-                    p.ft_wins= nil
-                end
-                firstTo= 0
-            end
 
-            -- exiting level
-            G_ExitLevel()
+        -- [strashbot] FriendMod and FirstToMod cohabitation
+        -- needs a modified version of friendMod
+        -- I prefer displaying the FTmod victory screen if the
+        -- "First to X" matched is settled during a team race
+        if friendIsPlayed and server.first_to.winner then
+            _friendHUD= FRIENDMOD_ToggleHUDstuff(false)
         end
+        -- at the end of the 'finish_timer'
+        -- if (server.first_to.finishTimer > FT_SCORESCREEN_DURATION) or (exitcountdown==1) then
+        --     -- checking if there is a round winner, if so, stopping round, cleaning up
+        --     if server.first_to.winner then
+        --         for p in players.iterate do
+        --             p.ft_wins= nil
+        --         end
+        --         firstTo= 0
+        --     end
+
+        --     -- exiting level
+        --     G_ExitLevel()
+        -- end
+        local manualexit= false;
+        for p in players.iterate do
+            if (not p.mo) or (p.spectator) then
+                continue
+            end
+            if p.exiting==99 and not p.ft_stasis then
+               p.ft_stasis = 5 * TICRATE - 2
+            end
+            if p.ft_stasis==nil then
+                p.ft_stasis= FT_SCORESCREEN_DURATION
+            else
+                p.ft_stasis= $ - 1
+                if p.ft_stasis>1 and not manualexit then
+                    p.exiting= 2
+                else
+                    manualexit= true
+                    p.pflags = $ & (~PF_TIMEOVER)
+                    if server.first_to.winner then
+                        p.ft_wins= nil
+                    end
+                end
+            end
+        end
+        if manualexit then
+            if server.first_to.winner then firstTo= 0 end
+            -- COM_BufInsertText(server, "exitlevel")
+            G_ExitLevel()
+            if elimIsPlayed then
+                COM_BufInsertText(server, "allowteamchange 1")
+                if Elim_endWinRound then Elim_endWinRound() end
+            end
+        end 
     end
 end)
 
@@ -557,6 +634,125 @@ end
 local spr_twinkle={"SGNSA0","SGNSB0","SGNSC0","SGNSD0","SGNSE0","SGNSF0","SGNSG0","SGNSH0","SGNSI0",}
 local a_spr_twinkle=nil
 
+
+-- [strashbot] FriendMod and FirstToMod cohabitation function
+-- needs an edited version of FriendMod
+-- obviously this code is very similar to FriendMod's hud.add function
+-- since I need to be able to draw some stuff while fatching the
+-- friendMod's layout
+local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
+    if ((p.ft_wins==nil) and (_ft_show_results_exclusive.value)) then return end;
+
+    -- [strashbot] FriendMod and FirstToMod cohabitation
+    -- needs a modified version of FriendMod
+    -- I need some infos from friendMod to properly display everything
+    local recalc, bluescore, orangescore, bossplayer, savedtheworld= FRIENDMOD_GetScores()
+    if ((not server.first_to) or (not server.first_to.finished)) then
+        return
+    end
+
+    local _finished= function(player)
+        if p.spectator or (not p.mo) then
+            return true
+        elseif p.pflags & PF_TIMEOVER then
+            return true
+        elseif p.exiting then
+            return true
+        end
+        return false
+    end
+
+    local gfxMedal= v.cachePatch("GOTITA")
+    local sortedplayers = {}
+    local str1Len, str2Len, str= 0, 0, ""
+    local leftoffset, rightoffset = 0, 0
+    if not bossplayer then
+        for q in players.iterate do
+            if not q.FRdata then return end
+            if q.mo and (not q.spectator) and q.FRdata.FRready then
+                table.insert(sortedplayers, q)
+            end
+        end
+        table.sort(sortedplayers, function(a, b)
+            if not (_finished(a) == _finished(b)) then
+                return _finished(a)
+            end
+            return a.FRdata.personalscore > b.FRdata.personalscore
+        end)
+        for _, q in ipairs(sortedplayers)
+            if q.ft_wins==nil then continue end
+
+            local finishflag = V_ALLOWLOWERCASE
+            if not _finished(q) then
+                finishflag = $|V_GRAYMAP|V_50TRANS
+            end
+            local tempname = q.name
+            if q == savedtheworld then
+                finishflag = (leveltime % 2) and finishflag or V_ALLOWLOWERCASE|V_YELLOWMAP
+                if leveltime % 50 >= 25 then
+                    tempname = "CLUTCH!"
+                end
+            end
+
+            local qwins= q.ft_wins - (
+                (q.ft_last_winner and server.first_to.finishTimer<TICRATE) and
+                    1
+                or  0
+            )
+            if(server.first_to.finishTimer==TICRATE) _playSfx= true end
+            if (not splitscreen and q.FRdata.FRteam == p.FRdata.FRteam) or (splitscreen and q.FRdata.FRteam == 1) or (p.spectator and q.FRdata.FRteam == 1) then
+                str1Len= v.stringWidth(q.FRdata.teamPrefix..tempname.." - "..q.FRdata.personalscore, finishflag, "thin")
+                str= " x "..qwins
+                str2Len= v.stringWidth(str, finishflag, "thin")
+                v.drawString(151-str1Len, 45+leftoffset, str, finishflag, "thin-right")
+                v.drawScaled((142-str1Len-str2Len+duptweak.x)*FRACUNIT, (45+leftoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, flags)
+                leftoffset = $ + 10
+            else
+                str1Len= v.stringWidth(q.FRdata.teamPrefix..q.FRdata.personalscore.." - "..tempname, finishflag, "thin")
+                str= qwins.." x "
+                str2Len= v.stringWidth(str, finishflag, "thin")
+                v.drawString(169+str1Len, 45+rightoffset, str, finishflag, "thin")
+                v.drawScaled((169+str1Len+str2Len+duptweak.x)*FRACUNIT, (45+rightoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, flags)
+                rightoffset = $ + 10
+            end
+        end
+    elseif not p.spectator then
+        local sortedplayers = {}
+        for q in players.iterate
+            if q.mo and not q.spectator and q.FRdata.FRready then
+                table.insert(sortedplayers, q)
+            end
+        end
+        table.sort(sortedplayers, function(a, b)
+            if(a.FRdata.FRteam~=b.FRdata.FRteam) then
+                return a.FRdata.FRteam==1
+            end
+            return a.realtime < b.realtime
+        end)
+        for _, q in ipairs(sortedplayers)
+            local qwins= q.ft_wins - (
+                (q.ft_last_winner and server.first_to.finishTimer<TICRATE) and
+                    1
+                or  0
+            )
+            if(server.first_to.finishTimer==TICRATE) _playSfx= true end
+            local finishflag = V_ALLOWLOWERCASE
+            if not _finished(q) then
+                finishflag = $|V_GRAYMAP|V_50TRANS
+            end
+            str1Len= v.stringWidth(q.FRdata.teamPrefix..q.name, finishflag, "thin")
+            str= qwins.." x "
+            str2Len= v.stringWidth(str, finishflag, "thin")
+            v.drawString(151-str1Len, 45 + leftoffset, str, finishflag, "thin-right")
+            v.drawScaled((142-str1Len-str2Len+duptweak.x)*FRACUNIT, (45+leftoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, finishflag)
+            leftoffset = $ + 10
+        end
+    end
+    if _ft_player_join.value then
+        drawStringCenter(v,160,192,"-= type \"j\" in chat to joint FT "..firstTo.." =-", V_ALLOWLOWERCASE, "small")
+    end
+end
+
 -- hud drawing function: https://wiki.srb2.org/wiki/Lua/Functions#hud.add
 hud.add(function(v, p)
     -- not drawing on hub, if mod not enables or no round launched or not in race mode
@@ -567,6 +763,11 @@ hud.add(function(v, p)
     local dupadjust = {x=(v.width()/v.dupx()), y=(v.height()/v.dupy())}
 	local duptweak = {x=((dupadjust.x - 320)/2), y=((dupadjust.y - 200)/2)}
     local flags= V_SNAPTOLEFT|V_HUDTRANS|V_SNAPTOTOP
+
+    if(friendIsPlayed and _friendHUD and (not elimIsPlayed) ) then
+        friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
+        return
+    end
 
     -- loading sprites (once, if not done)
     if not a_spr_twinkle then
@@ -660,6 +861,11 @@ hud.add(function(v, p)
         return
     end
     
+    local blueprefix, orangeprefix
+    if(friendIsPlayed and FRIENDMOD_GetScores) then
+        local a, b, c, d, e
+        a, b, c, d ,e, blueprefix, orangeprefix = FRIENDMOD_GetScores()
+    end
     -- following is about drawing the results screen
     local i=1
     for player in players.iterate do
@@ -667,6 +873,9 @@ hud.add(function(v, p)
         local wins= player.ft_wins
         if wins ~= nil then
             local name= player.name or "NULL"
+            if(friendIsPlayed and ((player.FRdata.FRteam==1 and blueprefix) or (player.FRdata.FRteam==2 and orangeprefix))) then
+                name= (player.FRdata.FRteam==1 and blueprefix or orangeprefix)..name.."\x80"
+            end
             local y= 23+i*10
 
             -- draw their name of left side of the screen
@@ -742,7 +951,6 @@ addHook("MapLoad", function(mapnum)
 
     -- check if we in race mode
     if not G_RaceGametype() then
-        print("[FirstTo] mod only available in \"race\" mode")
         return
     end
 
@@ -752,6 +960,7 @@ addHook("MapLoad", function(mapnum)
         if firstTo<=0 then
             player.ft_wins= nil
         end
+        player.ft_stasis= nil
     end
     server.first_to= nil
 
@@ -767,7 +976,12 @@ addHook("MapLoad", function(mapnum)
     -- is this race gonna be in combiring mode?
     combiIsPlayed= (_combi_enabled and _combi_enabled.value)
     -- [strashEdit] is this race gonna be in friend mode?
-    friendIsPlayed= FRIENDMOD_CheckTeams and true or false
+    friendIsPlayed= FRIENDMOD_CheckTeams and FRIENDMOD_CheckTeams()
+    -- [strashbot] FriendMod and FirstToMod cohabitation
+    -- needs an modified version of FriendMod
+    -- this prevents FriendMod's hud stuff to be drawn
+    -- when not in a team match
+    _friendHUD= (friendIsPlayed and FRIENDMOD_ToggleHUDstuff(friendIsPlayed and (not elimIsPlayed)))
 end)
 
 -- "NetVars" hook: https://wiki.srb2.org/wiki/Lua/Hooks#MapLoad
@@ -782,6 +996,7 @@ addHook("NetVars", function(net)
     elimIsPlayed= net($)
     combiIsPlayed= net($)
     friendIsPlayed= net($)
+end)
 
 -- "PlayerMsg" hook: https://wiki.srb2.org/wiki/Lua/Hooks#PlayerMsg
 -- syntax sugar via chat
