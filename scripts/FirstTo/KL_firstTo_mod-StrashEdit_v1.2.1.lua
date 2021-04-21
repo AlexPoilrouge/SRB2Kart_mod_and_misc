@@ -457,6 +457,8 @@ addHook("ThinkFrame", do
                     -- [strashbot] FriendMod and FirstToMod cohabitation
                     -- needs a modified version of friendsMod
                     -- fetching needed players info to determine round winners
+                    if (p.ft_wins == nil) then continue end
+
                     p.FRdata= FRIENDMOD_GetPlayersData(p)
                     
                     local teamwins= (
