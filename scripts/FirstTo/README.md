@@ -1,3 +1,9 @@
+## StrashBot Karting Version
+
+This a tweak version from the one released on the MB, to better fit
+within the strashBot karting server.
+
+
 # "First To" mod for Sonic Robot Blast 2 Kart
 
 
