@@ -974,7 +974,7 @@ addHook("MapLoad", function(mapnum)
     end
 
     -- is this race gonna be in elimination mode?
-    elimIsPlayed= (_el_enabled and _el_enabled.value)
+    elimIsPlayed= (_el_enabled and _el_enabled.value and not (mapheaderinfo[mapnum].levelflags & LF_SECTIONRACE))
     -- is this race gonna be in combiring mode?
     combiIsPlayed= (_combi_enabled and _combi_enabled.value)
     -- [strashEdit] is this race gonna be in friend mode?
