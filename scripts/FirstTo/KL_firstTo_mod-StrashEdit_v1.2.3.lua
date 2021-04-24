@@ -989,11 +989,7 @@ end)
 -- "NetVars" hook: https://wiki.srb2.org/wiki/Lua/Hooks#MapLoad
 addHook("NetVars", function(net)
     -- all this stuff needs to be the same for everyone, yeah
-    firstTo= net($)
-    server.first_to= net($)
-    for player in players.iterate do
-        player.ft_wins= net($)
-    end
+    if firstTo~=nil then firstTo= net($) end
     
     elimIsPlayed= net($)
     combiIsPlayed= net($)
