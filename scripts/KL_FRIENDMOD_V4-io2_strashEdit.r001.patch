@@ -1,4 +1,4 @@
-diff -ur KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua
+diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua
 --- KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua	2020-11-27 23:46:48.000000000 +0100
 +++ KL_FRIENDMOD_V4-io2_strashEdit.r001/lua/FRIENDMOD.lua	2021-04-21 00:11:13.152050916 +0200
 @@ -420,6 +420,9 @@
@@ -70,7 +70,7 @@ diff -ur KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
  rawset(_G, "FRIENDMOD_CheckTeams", function(...)
  	return fr_enabled.value
 -end)
-\ Pas de fin de ligne à la fin du fichier
+\ No newline at end of file
 +end)
 +
 +
