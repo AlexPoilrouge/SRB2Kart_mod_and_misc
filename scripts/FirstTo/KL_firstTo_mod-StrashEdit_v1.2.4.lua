@@ -670,7 +670,7 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
     local leftoffset, rightoffset = 0, 0
     if not bossplayer then
         for q in players.iterate do
-            if not q.FRdata then return end
+            if not q.FRdata then continue end
             if q.mo and (not q.spectator) and q.FRdata.FRready then
                 table.insert(sortedplayers, q)
             end
