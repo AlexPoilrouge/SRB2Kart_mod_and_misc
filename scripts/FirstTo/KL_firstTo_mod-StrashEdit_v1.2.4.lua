@@ -457,9 +457,9 @@ addHook("ThinkFrame", do
                     -- [strashbot] FriendMod and FirstToMod cohabitation
                     -- needs a modified version of friendsMod
                     -- fetching needed players info to determine round winners
-                    if (p.ft_wins == nil) then continue end
-
                     p.FRdata= FRIENDMOD_GetPlayersData(p)
+
+                    if (p.ft_wins == nil) then continue end
                     
                     local teamwins= (
                         ( bossplayer and (bluescore==1 or
@@ -672,6 +672,7 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
         for q in players.iterate do
             if not q.FRdata then continue end
             if q.mo and (not q.spectator) and q.FRdata.FRready then
+                print("[FTmod] inserting '"..q.name.."' ...")
                 table.insert(sortedplayers, q)
             end
         end
@@ -682,8 +683,6 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
             return a.FRdata.personalscore > b.FRdata.personalscore
         end)
         for _, q in ipairs(sortedplayers)
-            if q.ft_wins==nil then continue end
-
             local finishflag = V_ALLOWLOWERCASE
             if not _finished(q) then
                 finishflag = $|V_GRAYMAP|V_50TRANS
@@ -696,26 +695,40 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
                 end
             end
 
-            local qwins= q.ft_wins - (
-                (q.ft_last_winner and server.first_to.finishTimer<TICRATE) and
-                    1
-                or  0
-            )
+            local qwins= 0
+            if (q.ft_wins~=nil) then
+                qwins= q.ft_wins - (
+                    (q.ft_last_winner and server.first_to.finishTimer<TICRATE) and
+                        1
+                    or  0
+                )
+            end
+
             if(server.first_to.finishTimer==TICRATE) _playSfx= true end
-            if (not splitscreen and q.FRdata.FRteam == p.FRdata.FRteam) or (splitscreen and q.FRdata.FRteam == 1) or (p.spectator and q.FRdata.FRteam == 1) then
-                str1Len= v.stringWidth(q.FRdata.teamPrefix..tempname.." - "..q.FRdata.personalscore, finishflag, "thin")
-                str= " x "..qwins
-                str2Len= v.stringWidth(str, finishflag, "thin")
-                v.drawString(151-str1Len, 45+leftoffset, str, finishflag, "thin-right")
-                v.drawScaled((142-str1Len-str2Len+duptweak.x)*FRACUNIT, (45+leftoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, flags)
-                leftoffset = $ + 10
+            print("[FTmod] okay so I'm '"..p.name.."' drawing for '"..q.name.."'...")
+            if (q.FRdata) then
+                print("[FTmod] +--> yep")
+                if (not splitscreen and (p.FRdata) and q.FRdata.FRteam == p.FRdata.FRteam) or (splitscreen and q.FRdata.FRteam == 1) or (p.spectator and q.FRdata.FRteam == 1) then
+                    if(q.ft_wins~=nil) then
+                        str1Len= v.stringWidth(q.FRdata.teamPrefix..tempname.." - "..q.FRdata.personalscore, finishflag, "thin")
+                        str= " x "..qwins
+                        str2Len= v.stringWidth(str, finishflag, "thin")
+                        v.drawString(151-str1Len, 45+leftoffset, str, finishflag, "thin-right")
+                        v.drawScaled((142-str1Len-str2Len+duptweak.x)*FRACUNIT, (45+leftoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, flags)
+                    end
+                    leftoffset = $ + 10
+                else
+                    if(q.ft_wins~=nil) then
+                        str1Len= v.stringWidth(q.FRdata.teamPrefix..q.FRdata.personalscore.." - "..tempname, finishflag, "thin")
+                        str= qwins.." x "
+                        str2Len= v.stringWidth(str, finishflag, "thin")
+                        v.drawString(169+str1Len, 45+rightoffset, str, finishflag, "thin")
+                        v.drawScaled((169+str1Len+str2Len+duptweak.x)*FRACUNIT, (45+rightoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, flags)
+                    end
+                    rightoffset = $ + 10
+                end
             else
-                str1Len= v.stringWidth(q.FRdata.teamPrefix..q.FRdata.personalscore.." - "..tempname, finishflag, "thin")
-                str= qwins.." x "
-                str2Len= v.stringWidth(str, finishflag, "thin")
-                v.drawString(169+str1Len, 45+rightoffset, str, finishflag, "thin")
-                v.drawScaled((169+str1Len+str2Len+duptweak.x)*FRACUNIT, (45+rightoffset+duptweak.y)*FRACUNIT, FRACUNIT/2, gfxMedal, flags)
-                rightoffset = $ + 10
+                print("[FTmod] +--> nah")
             end
         end
     elseif not p.spectator then
