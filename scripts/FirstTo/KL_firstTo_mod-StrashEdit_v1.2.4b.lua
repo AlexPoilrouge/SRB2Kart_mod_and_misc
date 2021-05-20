@@ -672,7 +672,6 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
         for q in players.iterate do
             if not q.FRdata then continue end
             if q.mo and (not q.spectator) and q.FRdata.FRready then
-                print("[FTmod] inserting '"..q.name.."' ...")
                 table.insert(sortedplayers, q)
             end
         end
@@ -705,9 +704,7 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
             end
 
             if(server.first_to.finishTimer==TICRATE) _playSfx= true end
-            print("[FTmod] okay so I'm '"..p.name.."' drawing for '"..q.name.."'...")
             if (q.FRdata) then
-                print("[FTmod] +--> yep")
                 if (not splitscreen and (p.FRdata) and q.FRdata.FRteam == p.FRdata.FRteam) or (splitscreen and q.FRdata.FRteam == 1) or (p.spectator and q.FRdata.FRteam == 1) then
                     if(q.ft_wins~=nil) then
                         str1Len= v.stringWidth(q.FRdata.teamPrefix..tempname.." - "..q.FRdata.personalscore, finishflag, "thin")
@@ -727,8 +724,6 @@ local function friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
                     end
                     rightoffset = $ + 10
                 end
-            else
-                print("[FTmod] +--> nah")
             end
         end
     elseif not p.spectator then
