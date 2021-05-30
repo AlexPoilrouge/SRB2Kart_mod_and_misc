@@ -21,6 +21,9 @@ local PC_FLAGS= {
     SUBMIT_CMD_CALLED= 131072   --"submit command" call has been made
 }
 
+-- list of "hooks" that are called everytime a new party has been confrimed
+local RegisteredPartyHooks= {}
+
 -- The main object, allocated globally for external use
 rawset(_G, "PartyChecker",
     {
@@ -58,9 +61,25 @@ rawset(_G, "PartyChecker",
                     end
                 end
                 return party
+            end,
+        
+        -- function that adds a "hook" function (parameter) to the list of "registeredParty" hooks.
+        -- Once added, each time a new a party has been confirmed, this function will be called,
+        -- with a table containing every player of this party, as argument.
+        add_registeredPartyHook=
+            function(func)
+                table.insert(RegisteredPartyHooks, func)
             end
     }
 )
+
+-- calls every 'partyRegistered' hooks with the newly
+-- registered party (table containing concerned players) as argument
+local function call_partyHooks(t_party)
+    for _,f in pairs(RegisteredPartyHooks) do
+        f(t_party)
+    end
+end
 
 -- COM_AddCommand : https://wiki.srb2.org/wiki/Lua/Functions#COM_AddCommand
 -- Command that is used by the script to submit the "party bits" to the server (partyFlag)
@@ -101,6 +120,10 @@ COM_AddCommand("_pc_partysumbit", function(player, partyFlag)
         -- "party checking" has been done
         player.party_flags= PC_FLAGS.PARTY_CHECKED
 
+        -- we now can call the 'registeredParty' hooks, even if this
+        -- is a lone player
+        call_partyHooks({player})
+
         return
     end
 
@@ -116,7 +139,10 @@ COM_AddCommand("_pc_partysumbit", function(player, partyFlag)
             p.party_flags= (PC_FLAGS.PARTY_CHECKED | n_partyFlag)
         end
     end
-    
+
+    -- we now can call the 'registeredParty' hooks,
+    -- with the newly confirmed party as argument
+    call_partyHooks(PartyChecker.getPartyPlayers(player))    
 end)
 
 -- function used by splitscreen players on client side to determine and generate the
@@ -183,8 +209,13 @@ addHook("ThinkFrame", do
     party_check()
 end)
 
--- "IntermissionThinker" hook : https://wiki.srb2.org/wiki/Lua/Hooks#IntermissionThinker
+-- "IntermissionThinker" hook : https://wiki.srb2.org/wiki/Lua/Kart/Hooks#IntermissionThinker
 addHook("IntermissionThinker", do
+    party_check()
+end)
+
+-- "VoteThinker" hook : https://wiki.srb2.org/wiki/Lua/Kart/Hooks#VoteThinker
+addHook("VoteThinker", do
     party_check()
 end)
 

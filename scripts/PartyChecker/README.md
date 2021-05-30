@@ -41,3 +41,7 @@ When *PartyChecker.lua* is loaded, it allocates a global object `PartyChecker`. 
 
 - `PartyChecker.getPartyPlayers(player)` : takes a player (`player_t`) as argument. Returns a table that contains all the players that are in the same splitscreen party has this player (including himself). If said player is not in a party, it will return an empty table
 
+###### Hook
+
+- `PartyChecker.add_registeredPartyHook(function)` : adds a “ *registeredParty* ” hook. Such hook (given as argument) is a function (no returns) that parameter should be expected to be a table containing a list of players that forms a party. This function well then be called each time a party is confirmed. If a player is confirmed not to be in a party, then the argument passed to the function will still be a table containing just this player.
+
