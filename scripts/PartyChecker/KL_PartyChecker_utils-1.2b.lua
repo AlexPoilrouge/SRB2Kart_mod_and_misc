@@ -12,6 +12,9 @@
 -- ------------------------------------------- --
 
 
+if PartyChecker then
+    return
+end
 
 -- Flags for PartyChecker
 -- basically used to inform the progression of the "party check"
