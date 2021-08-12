@@ -497,7 +497,7 @@ addHook("ThinkFrame", do
         elseif contesters == 1 then
             local _p= nil
             for p in players.iterate do
-                if (p.ft_wins~=nil) and (not p.spectator) and ((realtime_min<0) or (p.realtime<=realtime_min)) and not (p.pflags & PF_TIMEOVER) then
+                if (p.ft_wins~=nil) and (not p.spectator) and ((realtime_min<0) or (p.realtime<=realtime_min)) and not ((p.pflags & PF_TIMEOVER) or elimIsPlayed) then
                     _p= p
                     break
                 end
