@@ -605,7 +605,11 @@ addHook("ThinkFrame", do
                     p.exiting= 2
                 else
                     manualexit= true
-                    p.pflags = $ & (~PF_TIMEOVER)
+                    -- without this HPmod ressucitates player after screen, giving them points
+                    -- hopefully this doesn't throw bugs anywhere else
+                    if not (p.playerstate & PST_DEAD) then
+                        p.pflags = $ & (~PF_TIMEOVER)
+                    end
                     if server.first_to.winner then
                         p.ft_wins= nil
                     end
