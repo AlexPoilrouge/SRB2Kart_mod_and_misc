@@ -591,7 +591,7 @@ addHook("ThinkFrame", do
         -- end
         local manualexit= false;
         for p in players.iterate do
-            if (not p.mo) or (p.spectator) then
+            if (not elimIsPlayed ) and ((not p.mo) or (p.spectator)) then
                 continue
             end
             if p.exiting==99 and not p.ft_stasis then
