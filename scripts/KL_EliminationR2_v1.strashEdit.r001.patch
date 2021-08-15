@@ -16,8 +16,8 @@ Binary files KL_EliminationR2_v1/EPICB0 and KL_EliminationR2_v1.strashEdit.r001/
 Binary files KL_EliminationR2_v1/EPICB0.lmp and KL_EliminationR2_v1.strashEdit.r001/EPICB0.lmp differ
 diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
 --- KL_EliminationR2_v1/LUA_EL	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL	2021-08-15 18:49:08.503290941 +0200
-@@ -0,0 +1,1247 @@
++++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL	2021-08-16 01:18:53.460198723 +0200
+@@ -0,0 +1,1250 @@
 +//elimination, original work by Amperbee aka Rapidgame7#1949
 +//NVJR elimination most kludging done by freeman#7626 and galactice (with permission)
 +
@@ -1262,6 +1262,9 @@ diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
 +		elim.diedTimer= $-1
 +	end
 +	return elim.diedTimer
++end)
++rawset(_G, "Elim_util_started", function()
++	return elim.started
 +end)
 +-- --
 +	

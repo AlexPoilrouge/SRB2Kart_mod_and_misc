@@ -1,6 +1,6 @@
 diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua
 --- KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua	2021-07-30 20:49:14.000000000 +0200
-+++ KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua	2021-08-15 17:03:06.000000000 +0200
++++ KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua	2021-08-16 01:08:34.000000000 +0200
 @@ -11,9 +11,26 @@
  	"SPR_HPWN",
  	"S_HPWARNING1", "S_HPWARNING2",
@@ -30,7 +30,36 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  
  states[S_HPWARNING1] = {SPR_HPWN, FF_FULLBRIGHT|A, 8, nil, 0, 0, S_HPWARNING2}
  states[S_HPWARNING2] = {SPR_HPWN, FF_FULLBRIGHT|B, 8, nil, 0, 0, S_HPWARNING1}
-@@ -629,8 +646,11 @@
+@@ -273,12 +290,22 @@
+ 	if p.hpmod.deathtimer > 0 then return end
+ 	if p.exiting then return end --ignore damage if the player has finished
+ 	
+-	if dmg >= p.hpmod.hp or force then
+-		if p.pflags & PF_TIMEOVER then return end --stop this from happening twice
+-
+-		--add this player to a list, we need to check if they die later
+-		--print(source)
+-		deadPlayers[#deadPlayers+1] = {p, source, dmg, force}
++	if dmg >= p.hpmod.hp or force then
++		-- [strashEdit] --
++		-- this allows to not ruin the elimination round if hpmod terminates
++		-- all player before elim's 'preplay' timer is up
++		if elimMode and Elim_util_started and not Elim_util_started() then
++			p.hpmod.hp= 1
++		else
++		-- --
++			if p.pflags & PF_TIMEOVER then return end --stop this from happening twice
++
++			--add this player to a list, we need to check if they die later
++			--print(source)
++			deadPlayers[#deadPlayers+1] = {p, source, dmg, force}
++		-- --
++		end
++		-- --
+ 	else
+ 		p.hpmod.hp = $-dmg
+ 		local lastlap = p.laps == numlaps-1
+@@ -629,8 +656,11 @@
  				p.hpmod.deathtimer = cv_deathdelay.value
  			end
  		elseif p.hpmod.deathtimer == cv_deathdelay.value then
@@ -44,7 +73,7 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  			p.hpmod.deathtimer = $+1
  		end
  
-@@ -789,8 +809,11 @@
+@@ -789,8 +819,11 @@
  				boom.angle = p.mo.angle
  				boom.target = p.mo
  				--p.spectator = true
@@ -58,7 +87,7 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  				continue
  				//end
  			end
-@@ -832,7 +855,9 @@
+@@ -832,7 +865,9 @@
  			end
  		end
  	end
