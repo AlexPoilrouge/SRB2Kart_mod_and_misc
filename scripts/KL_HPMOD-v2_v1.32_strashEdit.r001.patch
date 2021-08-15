@@ -1,0 +1,72 @@
+diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua
+--- KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua	2021-07-30 20:49:14.000000000 +0200
++++ KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua	2021-08-15 17:03:06.000000000 +0200
+@@ -11,9 +11,26 @@
+ 	"SPR_HPWN",
+ 	"S_HPWARNING1", "S_HPWARNING2",
+ 	"MT_HPWARNING",
+-	"sfx_hpelmn", "sfx_hpeati",
++	"sfx_hpeati",
++	
++	"sfx_hpelmn", "sfx_hpfkup",
++	
+ 	"sfx_hpimpc", "sfx_hpimpb", "sfx_hpimpa"
+-)
++)
++
++-- [StrashEdit] --
++local deathTaunts={
++	sfx_hpelmn, sfx_hpfkup
++}
++
++local function playDeathTaunts(player)
++	local chosenDeathTaunt= P_RandomRange(1, #deathTaunts)
++	S_StartSound(nil, deathTaunts[chosenDeathTaunt])
++	if Elim_util_printRandomDeathAnnouncement then
++		Elim_util_printRandomDeathAnnouncement(player.name)
++	end
++end
++-- --
+ 
+ states[S_HPWARNING1] = {SPR_HPWN, FF_FULLBRIGHT|A, 8, nil, 0, 0, S_HPWARNING2}
+ states[S_HPWARNING2] = {SPR_HPWN, FF_FULLBRIGHT|B, 8, nil, 0, 0, S_HPWARNING1}
+@@ -629,8 +646,11 @@
+ 				p.hpmod.deathtimer = cv_deathdelay.value
+ 			end
+ 		elseif p.hpmod.deathtimer == cv_deathdelay.value then
+-			killPlayer(p)
+-			S_StartSound(nil, sfx_hpelmn)
++			killPlayer(p)
++			-- [StrashEdit] --
++			-- S_StartSound(nil, sfx_hpelmn)
++			playDeathTaunts(p)
++			-- --
+ 			p.hpmod.deathtimer = $+1
+ 		end
+ 
+@@ -789,8 +809,11 @@
+ 				boom.angle = p.mo.angle
+ 				boom.target = p.mo
+ 				--p.spectator = true
+-				p.elim_rejoinEnd = true
+-				S_StartSound(nil, sfx_hpelmn)
++				p.elim_rejoinEnd = true
++				-- [StrashEdit] --
++				-- S_StartSound(nil, sfx_hpelmn)
++				playDeathTaunts(p)
++				-- --
+ 				continue
+ 				//end
+ 			end
+@@ -832,7 +855,9 @@
+ 			end
+ 		end
+ 	end
+-	
++	-- [strashEdit] --
++	if Elim_util_diedTimerTic then Elim_util_diedTimerTic() end
++	-- --
+ end
+ 
+ local function hpmodRespawn(p)
+Binary files KL_HPMOD-v2-NVJR_v1.32/Sounds/DSHPFKUP.ogg and KL_HPMOD-v2_v1.32_strashEdit.r001/Sounds/DSHPFKUP.ogg differ

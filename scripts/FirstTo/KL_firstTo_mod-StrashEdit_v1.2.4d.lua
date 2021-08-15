@@ -1,4 +1,3 @@
-
 -- Integer that, if different than zero, signifies that a "First to N" round
 -- has been started / is ongoing
 -- Making it availabe globally so external scripts can check for its

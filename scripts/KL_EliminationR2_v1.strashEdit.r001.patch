@@ -16,8 +16,8 @@ Binary files KL_EliminationR2_v1/EPICB0 and KL_EliminationR2_v1.strashEdit.r001/
 Binary files KL_EliminationR2_v1/EPICB0.lmp and KL_EliminationR2_v1.strashEdit.r001/EPICB0.lmp differ
 diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
 --- KL_EliminationR2_v1/LUA_EL	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL	2021-08-12 15:52:50.693201146 +0200
-@@ -0,0 +1,1221 @@
++++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL	2021-08-15 18:49:08.503290941 +0200
+@@ -0,0 +1,1247 @@
 +//elimination, original work by Amperbee aka Rapidgame7#1949
 +//NVJR elimination most kludging done by freeman#7626 and galactice (with permission)
 +
@@ -1191,14 +1191,18 @@ diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
 +	// Time
 +	drawStringMkII(ttx, tty+16, ttext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_10TRANS, {color=tcol,align="center"})
 +	
-+	if el_announcements.value == 1 then
-+		if elim.diedTimer > 0 then
-+			//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
-+			local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
-+			printAnnouncement(tsx, tsy)
-+			//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
-+		end
-+	end
++	-- [ strashEdit ] --
++	-- Moving this outside this scope
++	-- so that 'Elim_util_printRandomDeathAnnouncement' can work...
++	--if el_announcements.value == 1 then
++	--	if elim.diedTimer > 0 then
++	--		//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
++	--		local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
++	--		printAnnouncement(tsx, tsy)
++	--		//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
++	--	end
++	--end
++	-- --
 +
 +	local sofmul = 4
 +	local maxp = 2*sofmul
@@ -1224,6 +1228,16 @@ diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
 +	//(eliminate and lastposp == 1) or elim_curtime < -10*TICRATE
 +
 +end
++	-- [ strashEdit ] --
++	if el_announcements.value == 1 then
++		if elim.diedTimer > 0 then
++			//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
++			local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
++			printAnnouncement(tsx, tsy)
++			//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
++		end
++	end
++	-- --
 +end
 +end, "game")
 +
@@ -1237,6 +1251,18 @@ diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
 +-- so that they can respawn back eliminated players
 +rawset(_G, "Elim_respawnEliminatedPlayers", _respawnEliminatedPlayers)
 +rawset(_G, "Elim_endWinRound", _endElimRound)
++
++rawset(_G, "Elim_util_printRandomDeathAnnouncement", function(playerName)
++	chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
++	elim.diedName = playerName
++	elim.diedTimer = 5*TICRATE
++end)
++rawset(_G, "Elim_util_diedTimerTic", function()
++	if elim.diedTimer>0 then
++		elim.diedTimer= $-1
++	end
++	return elim.diedTimer
++end)
 +-- --
 +	
 \ No newline at end of file
@@ -2514,7 +2540,7 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 \ No newline at end of file
 diff -ruN KL_EliminationR2_v1/LUA_FNT KL_EliminationR2_v1.strashEdit.r001/LUA_FNT
 --- KL_EliminationR2_v1/LUA_FNT	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_FNT	2021-08-12 15:52:50.696534449 +0200
++++ KL_EliminationR2_v1.strashEdit.r001/LUA_FNT	2021-08-15 18:49:08.503290941 +0200
 @@ -0,0 +1,101 @@
 +local cached = false
 +
@@ -2820,7 +2846,7 @@ Binary files KL_EliminationR2_v1/PLAYSRB2 and KL_EliminationR2_v1.strashEdit.r00
 Binary files KL_EliminationR2_v1/PLAYSRB2.lmp and KL_EliminationR2_v1.strashEdit.r001/PLAYSRB2.lmp differ
 diff -ruN KL_EliminationR2_v1/README KL_EliminationR2_v1.strashEdit.r001/README
 --- KL_EliminationR2_v1/README	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/README	2021-08-12 15:52:50.696534449 +0200
++++ KL_EliminationR2_v1.strashEdit.r001/README	2021-08-15 18:49:08.503290941 +0200
 @@ -0,0 +1,132 @@
 +=== STRASHBOT EDIT ===
 +this version is a tweaked version, by Dr_Nope#0037 of
