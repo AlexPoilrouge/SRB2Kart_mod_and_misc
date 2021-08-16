@@ -1,6 +1,6 @@
 diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua
 --- KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua	2021-07-30 20:49:14.000000000 +0200
-+++ KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua	2021-08-16 01:08:34.000000000 +0200
++++ KL_HPMOD-v2_v1.32_strashEdit.r001/Lua/hpmod.lua	2021-08-16 23:48:10.814986157 +0200
 @@ -11,9 +11,26 @@
  	"SPR_HPWN",
  	"S_HPWARNING1", "S_HPWARNING2",
@@ -30,9 +30,68 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  
  states[S_HPWARNING1] = {SPR_HPWN, FF_FULLBRIGHT|A, 8, nil, 0, 0, S_HPWARNING2}
  states[S_HPWARNING2] = {SPR_HPWN, FF_FULLBRIGHT|B, 8, nil, 0, 0, S_HPWARNING1}
-@@ -273,12 +290,22 @@
+@@ -169,7 +186,17 @@
+ 	defaultvalue = "Off",
+ 	flags = CV_NETVAR,
+ 	possibleValue = CV_OnOff
+-}
++}
++
++-- [strashEdit] --
++-- armor bonus according to weight of character?
++local cv_armorbonusfactor = CV_RegisterVar{
++	name = "hpmod_armorbonus",
++	defaultvalue = 3,
++	flags = CV_NETVAR,
++	possibleValue = {MIN = 0, MAX = 10}
++}
++-- ---
+ 
+ 
+ //damage amounts for items for easy reference
+@@ -183,7 +210,8 @@
+ local HPDAM_CRUSH = CV_RegisterVar({"hpmod_dmgcrush", 20, CV_NETVAR, CV_Natural})//25 //20 //grow/shrink
+ local HPDAM_BALLHOG = CV_RegisterVar({"hpmod_dmgballhog", 15, CV_NETVAR, CV_Natural})//15 
+ local HPDAM_THUNDER = CV_RegisterVar({"hpmod_dmgthunder", 10, CV_NETVAR, CV_Natural})//10
+-local HPDAM_RESPAWN = CV_RegisterVar({"hpmod_dmgrespawn", 15, CV_NETVAR, CV_Natural})//15
++local HPDAM_RESPAWN = CV_RegisterVar({"hpmod_dmgrespawn", 15, CV_NETVAR, CV_Natural})//15
++--local HPDAM_RESPAWN = CV_RegisterVar({"hpmod_dmgrespawn", 15, CV_NETVAR, CV_Unsigned})//15 [StrashEdit] ye I need this to deal no mdg for cruel mode…
+ local HPDAM_SPINOUT = CV_RegisterVar({"hpmod_dmgspinout", 10, CV_NETVAR, CV_Natural})//10 //any spinout from a hazard or other damage source
+ 
+ //sinks do MAXHP damage, instant kill, all the time
+@@ -225,7 +253,12 @@
+ local retirelen = nil
+ 
+ local elimMode = false
+-local interthonk = false //if intermission thinker has thonk'd (announces combo highscores)
++local interthonk = false //if intermission thinker has thonk'd (announces combo highscores)
++
++-- [strashEdit] --
++-- for cruel mode
++local funnyKill= nil
++-- --
+ 
+ local bargfx = nil
+ local barbggfx = nil
+@@ -271,14 +304,37 @@
+ 	if not p.hpmod then resetHp(p) end
+ 	
  	if p.hpmod.deathtimer > 0 then return end
- 	if p.exiting then return end --ignore damage if the player has finished
+-	if p.exiting then return end --ignore damage if the player has finished
++	if p.exiting then return end --ignore damage if the player has finished
++	
++	-- [strashEdit] --
++	-- armor bonus
++	local _w= p.kartweight
++	_w= ( (_w<=0) and 1 or _w )
++	local dmg= dmg -
++		(
++			(cv_armorbonusfactor.value>0) and
++				(_w*cv_armorbonusfactor.value)/9
++			or	0
++		)
++	dmg= ( (dmg<=0) and 1 or dmg )
++	-- --
  	
 -	if dmg >= p.hpmod.hp or force then
 -		if p.pflags & PF_TIMEOVER then return end --stop this from happening twice
@@ -59,7 +118,62 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  	else
  		p.hpmod.hp = $-dmg
  		local lastlap = p.laps == numlaps-1
-@@ -629,8 +656,11 @@
+@@ -412,7 +468,10 @@
+ 		sneakerComboOver = 0, //combo results when window expires
+ 		damageDealt = {damage=0,hits=0}, //total damage dealt in total hits
+ 		bestCombo = {damage=0,hits=0,points=0,totalPoints=0}, //best combo damage, number of hits, and total points, and aggregate points
+-		kills = 0 //death
++		kills = 0, //death
++		-- [strashEdit] --
++		fd_respawnSafeTimer= nil
++		-- --
+ 	}
+ end
+ 
+@@ -431,7 +490,8 @@
+ 	everyoneDeadTimer = net($)
+ 	exitTimer = net($)
+ 	deadPlayers = net($)
+-	elimMode = net($)
++	elimMode = net($)
++	funnyKill= net($)
+ end
+ 
+ local function hpmodChange()
+@@ -471,7 +531,13 @@
+ 	else
+ 		elimMode = false
+ 	end
+-	interthonk = false
++	interthonk = false
++	
++	-- [strashEdit] --
++	local fd_enable= CV_FindVar("fd_enable")
++	local fd_killhit= CV_FindVar("fd_hitkill")
++	funnyKill= ((fd_enable and fd_enable.value) and (fd_killhit and fd_killhit.value))
++	-- --
+ 	
+ 	if G_BattleGametype() then
+ 		hud.disable("battlerankingsbumpers")
+@@ -591,7 +657,16 @@
+ 			p.hpmod.bumpertimer = $-1
+ 		else
+ 			p.hpmod.bumper = nil
+-		end
++		end
++		
++		-- [strashEdit] --
++		-- for cruel mode
++		if p.hpmod.fd_respawnSafeTimer~=nil and p.hpmod.fd_respawnSafeTimer>0 then
++			p.hpmod.fd_respawnSafeTimer= $-1
++		else
++			p.hpmod.fd_respawnSafeTimer= nil
++		end
++		-- --
+ 		
+ 		if p.spectator then continue end
+ 		
+@@ -629,8 +704,11 @@
  				p.hpmod.deathtimer = cv_deathdelay.value
  			end
  		elseif p.hpmod.deathtimer == cv_deathdelay.value then
@@ -73,7 +187,16 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  			p.hpmod.deathtimer = $+1
  		end
  
-@@ -789,8 +819,11 @@
+@@ -648,7 +726,7 @@
+ 			if cv_hphealmode.value == 1 and not lastlap then
+ 				p.hpmod.minhp = min(p.hpmod.hp+cv_hpheal.value, hpmod.maxhp)
+ 			end
+-		end
++		end
+ 
+ 		if (p.mo.eflags & MFE_JUSTBOUNCEDWALL) and shouldHurt(p) and cv_wallbonkdamage.value then
+ 			local dmg = FixedInt(FixedDiv(p.speed, FRACUNIT*9))
+@@ -789,8 +867,11 @@
  				boom.angle = p.mo.angle
  				boom.target = p.mo
  				--p.spectator = true
@@ -87,7 +210,7 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  				continue
  				//end
  			end
-@@ -832,7 +865,9 @@
+@@ -832,7 +913,9 @@
  			end
  		end
  	end
@@ -98,4 +221,73 @@ diff -ruN KL_HPMOD-v2-NVJR_v1.32/Lua/hpmod.lua KL_HPMOD-v2_v1.32_strashEdit.r001
  end
  
  local function hpmodRespawn(p)
+@@ -873,7 +956,14 @@
+ 	else
+ 		attacker = nil
+ 	end
+-	hpmod_damagehp(pmo.player, HPDAM_RESPAWN.value, attacker)
++	--hpmod_damagehp(pmo.player, HPDAM_RESPAWN.value, attacker)
++	-- [StrashEdit] --
++	if pmo.player.hpmod.fd_respawnSafeTimer==nil then
++		hpmod_damagehp(pmo.player, HPDAM_RESPAWN.value, attacker)
++	else
++		pmo.player.hpmod.fd_respawnSafeTimer= nil
++	end
++	-- --
+ 	if hitfeed then
+ 		HF_SendHitMessage(generateHFForPlayer(attacker), generateHFForPlayer(pmo.player), "K_HMFALL")
+ 	end
+@@ -913,7 +1003,13 @@
+ 	else //default to spinout
+ 		//local plr = (pmo and pmo.valid) and pmo.player or nil
+ 		hpmod_damagehp(p, HPDAM_SPINOUT.value, plr)
+-	end
++	end
++	
++	-- [StrashEdit] --
++	-- for cruel mode
++	p.hpmod.fd_respawnSafeTimer= funnyKill and (3*TICRATE) or nil
++	-- --
++	
+ 	if mo and mo.valid and 
+ 	(mo.type == MT_JAWZ_SHIELD or mo.type == MT_ORBINAUT_SHIELD) and 
+ 	cv_noorbitspinout.value then
+@@ -932,11 +1028,21 @@
+ 		-- spb boom
+ 		hpmod_damagehp(p, HPDAM_SPB.value, plr) //30
+ 		-- A HA HA YOU HAVE UNOOOOOOOOOOOOOOOO
+-		-- +4 to face
++		-- +4 to face
++	
++		-- [StrashEdit] --
++		-- for cruel mode
++		p.hpmod.fd_respawnSafeTimer= funnyKill and (3*TICRATE) or nil
++		-- --
+ 		return
+ 	end
+ 	-- regular boom
+-	hpmod_damagehp(p, HPDAM_EXPLOSION.value, plr) //20
++	hpmod_damagehp(p, HPDAM_EXPLOSION.value, plr) //20
++	
++	-- [StrashEdit] --
++	-- for cruel mode
++	p.hpmod.fd_respawnSafeTimer= funnyKill and (3*TICRATE) or nil
++	-- --
+ end
+ 
+ local function hpmodSquish(p, mo, pmo)
+@@ -945,7 +1051,12 @@
+ 
+ 	if not (p and p.valid) then return end
+ 	local plr = (pmo and pmo.valid) and pmo.player or nil
+-	hpmod_damagehp(p, HPDAM_CRUSH.value, plr) //20
++	hpmod_damagehp(p, HPDAM_CRUSH.value, plr) //20
++	
++	-- [StrashEdit] --
++	-- for cruel mode
++	p.hpmod.fd_respawnSafeTimer= funnyKill and (3*TICRATE) or nil
++	-- --
+ end
+ 
+ local function hpmodBumpFight(mobj1, mobj2)
 Binary files KL_HPMOD-v2-NVJR_v1.32/Sounds/DSHPFKUP.ogg and KL_HPMOD-v2_v1.32_strashEdit.r001/Sounds/DSHPFKUP.ogg differ
