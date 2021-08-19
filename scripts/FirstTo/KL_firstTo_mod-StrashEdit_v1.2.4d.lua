@@ -777,7 +777,7 @@ hud.add(function(v, p)
 	local duptweak = {x=((dupadjust.x - 320)/2), y=((dupadjust.y - 200)/2)}
     local flags= V_SNAPTOLEFT|V_HUDTRANS|V_SNAPTOTOP
 
-    if(friendIsPlayed and _friendHUD and (not elimIsPlayed) ) then
+    if(friendIsPlayed and _friendHUD ) then
         friendModFriendlyHUD(v,p,dupadjust,duptweak,flags)
         return
     end
@@ -994,7 +994,7 @@ addHook("MapLoad", function(mapnum)
     -- needs an modified version of FriendMod
     -- this prevents FriendMod's hud stuff to be drawn
     -- when not in a team match
-    _friendHUD= (friendIsPlayed and FRIENDMOD_ToggleHUDstuff(friendIsPlayed and (not elimIsPlayed)))
+    _friendHUD= (friendIsPlayed and FRIENDMOD_ToggleHUDstuff(friendIsPlayed))
 end)
 
 -- "NetVars" hook: https://wiki.srb2.org/wiki/Lua/Hooks#MapLoad
