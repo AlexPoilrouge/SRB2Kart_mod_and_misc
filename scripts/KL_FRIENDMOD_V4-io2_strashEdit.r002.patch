@@ -1,6 +1,6 @@
 diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r002/lua/FRIENDMOD.lua
---- KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua	2020-11-27 23:46:48.000000000 +0100
-+++ KL_FRIENDMOD_V4-io2_strashEdit.r002/lua/FRIENDMOD.lua	2021-08-09 14:28:54.912285016 +0200
+--- KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua	2021-08-21 10:07:59.625684324 +0200
++++ KL_FRIENDMOD_V4-io2_strashEdit.r002/lua/FRIENDMOD.lua	2021-08-21 10:09:56.024086735 +0200
 @@ -420,6 +420,9 @@
  local savedtheworld = nil -- should we do special celebrations for 1 player beating a boss, or leader bonus deciding a normal teams game?
  local restorecolors = true -- have we written colors back to teams-mode players during intermission yet? (gotta preserve personal colors for mixed games)
@@ -11,7 +11,22 @@ diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
  -- just in case.
  local function sanitizebossname(s)
  	return s:gsub("%W", "")
-@@ -1474,8 +1477,12 @@
+@@ -976,7 +979,13 @@
+ 	return true
+ end
+ 
+-local function allfinished()
++local function allfinished()
++	-- [strashEdit] --
++	-- trying this out… hopefully it'll make it work properly with Elim
++	if ((Elimination and Elimination()) or (hpmod and hpmod.running)) then
++		return orangefinished() or bluefinished()
++	end
++	--
+ 	for p in players.iterate
+ 		if not finished(p) then
+ 			return false
+@@ -1474,8 +1483,12 @@
  	end
  	if leveltime == 5 then
  		if bossmode and doteamstuff then
@@ -26,25 +41,39 @@ diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
  			S_StartSound(nil, sfx_fmssb0)
  			if doteamstuff then
  				S_StartSound(nil, sfx_fmteam)
-@@ -1721,7 +1728,7 @@
+@@ -1721,7 +1734,14 @@
  				if not supervalid(p) then
  					continue
  				end
 -				if p.FRteam == 2 and not (p.pflags & PF_TIMEOVER) then
-+				if p.FRteam == 2 and (not (p.pflags & PF_TIMEOVER)) and not (Elimination and Elimination()) then
++				if p.FRteam == 2 and (not (p.pflags & PF_TIMEOVER))
++					and (not (Elimination and Elimination()))
++					-- [strashEdit] --
++					-- yeah, blowing up and therefore losing when all other team
++					-- is dead is also problematic in HPmod
++					and (not (hpmod and hpmod.running))
++					--  --
++				then
  					FRlog(p, "blue blowout die")
  					welcometofuckingdie(p)
  				end
-@@ -1734,7 +1741,7 @@
+@@ -1734,7 +1754,14 @@
  				if not supervalid(p) then
  					continue
  				end
 -				if p.FRteam == 1 and not (p.pflags & PF_TIMEOVER) then
-+				if p.FRteam == 1 and (not (p.pflags & PF_TIMEOVER)) and not (Elimination and Elimination()) then
++				if p.FRteam == 1 and (not (p.pflags & PF_TIMEOVER))
++					and (not (Elimination and Elimination()))
++					-- [strashEdit] --
++					-- yeah, blowing up and therefore losing when all other team
++					-- is dead is also problematic in HPmod
++					and (not (hpmod and hpmod.running))
++					--  --
++				then
  					FRlog(p, "orange blowout die")
  					welcometofuckingdie(p)
  				end
-@@ -1854,6 +1861,7 @@
+@@ -1854,6 +1881,7 @@
  			FRlog(p, "doing allfinish iterator")
  			if p.exiting == 99 and not p.FRstasis then
  				FRlog(p, "Detonate handler")
@@ -52,10 +81,22 @@ diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
  				p.FRstasis = 5 * TICRATE - 2
  			end
  			if p.FRstasis == nil then
-@@ -1916,6 +1924,10 @@
- 	if (countactive() < 2 and not fr_debug.value) then
+@@ -1912,10 +1940,19 @@
+ 
+ hud.add(function(v, p, c) -- AAAAAAAAAAHHHHHHHHHHHHH
+ 	if G_BattleGametype() return end -- nah
+-	localplayer = p
+-	if (countactive() < 2 and not fr_debug.value) then
++	localplayer = p
++	-- [strashEdit] --
++	-- yeah these modes might still need friend's hud if only 1 player remains…
++	if (not ((Elimination and Elimination()) or (hpmod and hpmod.running)))
++		and (countactive() < 2 and not fr_debug.value)
++	then
  		return
- 	end
+-	end
++	end
++	-- --
 +
 +	-- [strashEdit]
 +	if not doHUDstuff return end
@@ -63,7 +104,7 @@ diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
  	if not doteamstuff
  		if leveltime < (6 * TICRATE + (3 * TICRATE / 4)) then
  			local ffaflag = 0
-@@ -2106,11 +2118,15 @@
+@@ -2106,11 +2143,15 @@
  		elseif not p.spectator and p.FRexiting != 1 -- shhh. no tears.
  			local sortedplayers = {}
  			for q in players.iterate
@@ -80,7 +121,7 @@ diff -ru KL_FRIENDMOD_V4-io2/lua/FRIENDMOD.lua KL_FRIENDMOD_V4-io2_strashEdit.r0
  				return a.realtime < b.realtime
  			end)
  			for _, q in ipairs(sortedplayers)
-@@ -2251,4 +2267,38 @@
+@@ -2251,4 +2292,38 @@
  
  rawset(_G, "FRIENDMOD_CheckTeams", function(...)
  	return fr_enabled.value

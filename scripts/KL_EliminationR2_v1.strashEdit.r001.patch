@@ -1,1288 +1,18 @@
-Binary files KL_EliminationR2_v1/DSLAST1 and KL_EliminationR2_v1.strashEdit.r001/DSLAST1 differ
-Binary files KL_EliminationR2_v1/DSLAST1.ogg and KL_EliminationR2_v1.strashEdit.r001/DSLAST1.ogg differ
-Binary files KL_EliminationR2_v1/DSLAST2 and KL_EliminationR2_v1.strashEdit.r001/DSLAST2 differ
-Binary files KL_EliminationR2_v1/DSLAST2.ogg and KL_EliminationR2_v1.strashEdit.r001/DSLAST2.ogg differ
-Binary files KL_EliminationR2_v1/DSLAST3 and KL_EliminationR2_v1.strashEdit.r001/DSLAST3 differ
-Binary files KL_EliminationR2_v1/DSLAST3.ogg and KL_EliminationR2_v1.strashEdit.r001/DSLAST3.ogg differ
-Binary files KL_EliminationR2_v1/DSLAST4 and KL_EliminationR2_v1.strashEdit.r001/DSLAST4 differ
-Binary files KL_EliminationR2_v1/DSLAST4.ogg and KL_EliminationR2_v1.strashEdit.r001/DSLAST4.ogg differ
-Binary files KL_EliminationR2_v1/DSLAST5 and KL_EliminationR2_v1.strashEdit.r001/DSLAST5 differ
-Binary files KL_EliminationR2_v1/DSLAST5.ogg and KL_EliminationR2_v1.strashEdit.r001/DSLAST5.ogg differ
-Binary files KL_EliminationR2_v1/DSSDNDTH and KL_EliminationR2_v1.strashEdit.r001/DSSDNDTH differ
-Binary files KL_EliminationR2_v1/DSSDNDTH.ogg and KL_EliminationR2_v1.strashEdit.r001/DSSDNDTH.ogg differ
-Binary files KL_EliminationR2_v1/EPICA0 and KL_EliminationR2_v1.strashEdit.r001/EPICA0 differ
-Binary files KL_EliminationR2_v1/EPICA0.lmp and KL_EliminationR2_v1.strashEdit.r001/EPICA0.lmp differ
-Binary files KL_EliminationR2_v1/EPICB0 and KL_EliminationR2_v1.strashEdit.r001/EPICB0 differ
-Binary files KL_EliminationR2_v1/EPICB0.lmp and KL_EliminationR2_v1.strashEdit.r001/EPICB0.lmp differ
-diff -ruN KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
---- KL_EliminationR2_v1/LUA_EL	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL	2021-08-16 01:18:53.460198723 +0200
-@@ -0,0 +1,1250 @@
-+//elimination, original work by Amperbee aka Rapidgame7#1949
-+//NVJR elimination most kludging done by freeman#7626 and galactice (with permission)
-+
-+//hannu has invented and or used this method below for optimization
-+//i have been told it is faster but I still want to die
-+local TICRATE = TICRATE
-+local FRACUNIT = FRACUNIT
-+
-+local el_enabled = CV_RegisterVar({"elimination", "On", CV_NETVAR|CV_SHOWMODIF, CV_OnOff})
-+local el_time = CV_RegisterVar({"elim_time", "15", CV_NETVAR, CV_Natural})
-+local el_stime = CV_RegisterVar({"elim_starttime", "60", CV_NETVAR, CV_Natural})
-+local el_announcements = CV_RegisterVar({"elim_announcements", "On", CV_SHOWMODIF, CV_OnOff})
-+
-+local el_minplayers = CV_RegisterVar({"elim_minplayers", 0, CV_NETVAR|CV_SHOWMODIF, CV_Natural})
-+//by popular demand
-+
-+local el_spbgone = CV_RegisterVar({"elim_spbgone", 0, CV_NETVAR, {MIN=0,MAX=9999}})
-+local el_lightninggone = CV_RegisterVar({"elim_lightninggone", "Off", CV_NETVAR, CV_OnOff})
-+local el_spbdefault = CV_RegisterVar({"elim_spbdefault", "On", CV_NETVAR, CV_OnOff})
-+
-+local el_timescaling = CV_RegisterVar({"elim_timescaling", "Off", CV_NETVAR, CV_OnOff})
-+local el_scalingminplayers = CV_RegisterVar({"elim_scalingminplayers", "2", CV_NETVAR, {MIN=1,MAX=200}})
-+local el_scalingmaxplayers = CV_RegisterVar({"elim_scalingmaxplayers", "12", CV_NETVAR, {MIN=1,MAX=200}})
-+local el_scalingmintime = CV_RegisterVar({"elim_scalingmintime", "10", CV_NETVAR, CV_Natural})
-+local el_scalingmaxtime = CV_RegisterVar({"elim_scalingmaxtime", "25", CV_NETVAR, CV_Natural})
-+
-+local el_scorereport = CV_RegisterVar({"elim_scorereport", "Off", CV_NETVAR, CV_OnOff})
-+//dumps all players scores into the log round end, tourney mostley
-+
-+local el_test = CV_RegisterVar({"elim_test", "Off", CV_NETVAR|CV_NOSHOWHELP, CV_OnOff})
-+
-+//el_enabled - toggles elim on and off in-game
-+//el_time - the time between regular player eliminations once the game has started, seconds
-+//el_stime - the time the race must progress for before the first elimination timer begins
-+//el_announcements - client-side, if this is disabled playes won't see elimination announcements
-+
-+//el_timescaling - controls if the elim_time scales itself based on number of players
-+//el_scalingminplayers - at or below min players, elim_time is el_scalingmaxtime
-+//el_scalingmaxplayers - at or above max players, elim_time is el_scalingmintime
-+//el_scalingmin/maxtime - if players are between min and max, the elim_time is adjusted linearly between min and max
-+
-+// test is for testing elimination procedures:
-+// Prevents death by elimination, and forces the countdown to run under 1P mode.
-+
-+-- local slotmod_prng_local_t = 0
-+-- local slotmod_prng_local_x = 6278
-+-- local slotmod_prng_local_y = 975
-+-- local slotmod_prng_local_z = 39207
-+-- local slotmod_prng_local_w = 45678
-+--
-+-- local function N_Random()
-+	-- slotmod_prng_local_t = slotmod_prng_local_x ^^ (slotmod_prng_local_x << 11)
-+	-- slotmod_prng_local_x, slotmod_prng_local_y, slotmod_prng_local_z, slotmod_prng_local_w = slotmod_prng_local_y, slotmod_prng_local_z, slotmod_prng_local_w, slotmod_prng_local_w ^^ (slotmod_prng_local_w >> 19) ^^ slotmod_prng_local_t ^^ (slotmod_prng_local_t >> 8)
-+	-- return slotmod_prng_local_w
-+-- end
-+--
-+-- local function N_RandomRange(a, b)
-+	-- return a + abs(N_Random() % (b - a + 1))
-+-- end
-+
-+freeslot("MT_ELIMWARNING", "S_VISIBLE", "SPR_EPIC")
-+mobjinfo[MT_ELIMWARNING] = {
-+	spawnhealth = 9,
-+	spawnstate = S_VISIBLE,
-+	radius = 5,
-+	height = 5,
-+	flags = MF_NOGRAVITY|MF_NOCLIP|MF_NOCLIPHEIGHT
-+}
-+states[S_VISIBLE] = {
-+	sprite = SPR_EPIC,
-+	frame = A|FF_FULLBRIGHT,
-+	tics = -1,
-+	nextstate = S_NULL,
-+}
-+
-+freeslot("sfx_sdndth","sfx_last1","sfx_last2","sfx_last3","sfx_last4","sfx_last5")
-+
-+local function cSpd(ang, spd, m)
-+	if m == nil then m = {scale=FRACUNIT} end
-+	spd = FixedMul(spd, m.scale)
-+	return FixedMul( cos(ang), spd ), FixedMul( sin(ang), spd )
-+	//returns x and y of calc
-+end
-+
-+local function countPlayersInGame() //sorry callmore I stole this to use it here -freeman
-+	local out = 0
-+	for p in players.iterate do
-+		if not (p and p.valid and not p.spectator and not (p.pflags & PF_TIMEOVER)) then continue end
-+		out = $+1
-+	end
-+	return out
-+end
-+
-+local function cSpdEx(hang, vang, spd, m)
-+	if hang == nil then error("hAng missing", 2) end
-+	if vang == nil then error("vAng missing", 2) end
-+	if spd == nil then error("spd missing", 2) end
-+	if m == nil then m = {scale=FRACUNIT} end
-+	spd = FixedMul(spd, m.scale)
-+	local x = FixedMul( FixedMul( spd, cos(hang) ), cos(vang) )
-+	local y = FixedMul( FixedMul( spd, sin(hang) ), cos(vang) )
-+	local z = FixedMul( spd, sin(vang) )
-+	return x,y,z
-+	//returns x and y of calc
-+end
-+
-+local starttime = 6*TICRATE + (3*TICRATE/4) // leveltime when race actually starts (~235)
-+local introtime = 108+5 // leveltime when countdown, pre starttime, starts
-+
-+local elim = {}
-+local function resetElim() -- Resets elim table to default values. Epic!
-+	-- Should only be called within a mapload AND ONLY THEN.
-+	elim = {
-+		on = false, // Whether elimination is activated for this round
-+		started = false, // Set to true when leveltime > starttime + stime
-+		sp = false, // Whether this round begun with a single player (just for ease of access)
-+		test = false, // Whether this round begun as a test round
-+		runtime = 0, // Time since the elimination game started
-+
-+		eliminate = false, // Flag for second iterator to kill
-+		eliminatenow = false, // If in overtime, force players to fucking die
-+
-+		startpcount = 0, // How many players were alive at the start of this round
-+		livepcount = 0, // Players alive
-+		prevlivepcount = 0, // Players alive the previous tic
-+		el_timescaled = 15, //the time we will use if time scaling is on, instead of elim_time
-+		lastman = false, //if the last man standing in a team battle has been announced
-+
-+		curtime = 0, // Elimination timer - Always counts down, eliminates someone when hitting 0
-+
-+		win = false, // Whether someone won
-+		wintimer = 0, // Timer increases while win is true - This ends the map after a while
-+
-+		diedName = "", // Name of dead player/s
-+		diedTimer = 0, // Starts at a value, counts down until zero - Handles "X eliminated" display
-+		
-+		friendly = false, //friendmod detected loaded or not
-+		scoreannounce = false, //if intermission has thunk
-+		maplaps = 3 //stored map laps to reset to during intermission cause you can't access map info from intermission >:v(
-+	}
-+	if CV_FindVar("fr_enabled") and FRIENDMOD_CheckTeams() then elim.friendly = true else elim.friendly = false end
-+end
-+//resetElim()
-+
-+local announcements = {
-+	{"%n", "got eliminated"},
-+	{"%n", "got obliterated"},
-+	{"%n", "got deleted"},
-+	{"%n", "got destroyed"},
-+	{"%n", "got defeated"},
-+	{"%n", "got killed"},
-+	{"%n", "got massacred"},
-+	{"%n", "got karted to death"},
-+	{"%n", "got reduced to atoms"},
-+	{"%n", "got evaporated"},
-+	{"%n", "went poof"},
-+	{"%n", "has exploded"},
-+	{"%n", "is out"},
-+	{"%n", "is ded"},
-+	{"%n", "is dead"},
-+	{"%n", "is kil"},
-+	{"%n", "is kill"},
-+	{"%n", "is done"},
-+	{"%n", "went out"},
-+	{"%n", "went to sleep"},
-+	{"%n", "lost"},
-+	{"press f for", "%n"},
-+	{"rip", "%n"},
-+	{"rip in peace", "%n"},
-+	{"rest in peace", "%n"},
-+	{"goodbye", "%n"},
-+	{"bye", "%n"},
-+	{"babai", "%n"},
-+	{"cya", "%n"},
-+	{"peace out", "%n"},
-+	{"see you", "%n"},
-+	{"sayonara", "%n"},
-+	{"au revoir", "%n"},
-+	{"adios", "%n"},
-+	{"farewell", "%n"},
-+	{"namaste", "%n"},
-+	{"hasta la vista", "%n"},
-+	{"it's over for", "%n"},
-+	{"get out of here", "%n"},
-+	{"gtfo", "%n"},
-+	{"haha", "%n", "go boom"},
-+	{"%n", "see you", "space cowboy"},
-+	{"%n", "it's time to wait"},
-+	{"try again next race", "%n"},
-+	{"see you next race", "%n"},
-+	{"%n", "so long partner"},
-+	{"%n", "bit the dust"},
-+	{"you're too slow", "%n"},
-+	{"c'mon step it up", "%n"},
-+	{"%n", "has been slain"},
-+	{"it's no use", "%n"},
-+	{"i pity you", "%n"},
-+	{"%n", "got their butt kicked"},
-+	{"go to your room", "%n"},
-+	{"%n", "go take a break"},
-+	{"break time for", "%n"},
-+	{"%n", "wasn't fast enough"},
-+	{"oh my god", "%n", "waaaaaaa"},
-+	{"%n", "got the boot"},
-+	{"%n", "got booted out", "of the race"},
-+	{"Arivederchi", "%n"},
-+	{"%n", "is going to heaven"},
-+	{"%n", "is going to hell"},
-+	{"%n", "got lost", "in the sauce"},
-+	{"%n", "wasn't gamer enough"},
-+	{"%n", "didn't make it"},
-+	{"gg", "%n"},
-+	{"ggs", "%n"},
-+	{"ggwp", "%n"},
-+	{"you'll get them", "next time", "%n"},
-+	{"mission failed", "%n"},
-+	{"game over", "%n"},
-+	{"%n", "didn't get", "a promotion"},
-+	{"%n", "got chatbugged"},
-+	{"%n", "got pingspiked"},
-+	{"%n", "got eradicated"},
-+	{"%n", "flew too low"},
-+	{"%n", "frikin died"},
-+	{"%n", "didn't survive"},
-+	{"%n", "you lose"},
-+	{"%n", "got rekt"},
-+	{"%n", "lived and learned"},
-+	{"%n", "vanished"},
-+	{"%n", "disappeared"},
-+	{"%n", "got syncbombed"},
-+	{"%n", "stopped working"},
-+	{"curiosity", "killed the", "%n"},
-+	{"%n", "vanished into", "the void of space"},
-+	{"shoot", "%n", "failed"},
-+	{"see you later", "%n"},
-+	{"you can't catch me", "%n"},
-+	{"you guys always leave", "%n", "behind"},
-+	{"hey give", "%n", "some slack"},
-+	{"%n", "lackluster", "performance i'd say"},
-+	{"%n", "you are one", "pathetic creature"},
-+	{"wait for", "%n", "maria"},
-+	{"I don't think so", "%n"},
-+	{"%n", "you are weak"},
-+	{"%n", "loss unacceptable"},
-+	{"%n", "that was pathetic"},
-+	{"get out of my way", "%n"},
-+	{"guess", "%n", "is out"},
-+	{"c'mon", "%n", "you can do better"},
-+	{"lucky for you", "%n", "let you win"},
-+	{"%n", "got annihilated"},
-+	{"%n", "violently exploded"},
-+	{"%n", "alt f4'd"},
-+	{"thanos snapped", "%n", "out of existence"},
-+	{"the world was", "too tough for", "%n"},
-+	{"%n", "won't be missed"},
-+	{"%n", "will be missed"},
-+	{"%n", "got game ended"},
-+	{"%n", "self destructed"},
-+	{"%n", "got fragged"},
-+	{"%n", "got resynced"},
-+	{"%n", "died from an", "unfortunate event"},
-+	{"wave blew up", "%n"},
-+	{"%n", "left this plane", "of existence"},
-+	{"%n", "wrongdrifted"},
-+	{"I rate", "%n", "7 out of 10"},
-+	{"%n", "got cooked"},
-+	{"%n", "is now spectating"},
-+	{"omae wa mou", "shindeiru", "%n"},
-+	{"time to afk", "%n"},
-+	{"%n", "grab a snack", "and relax"},
-+	{"%n", "went into orbit"},
-+	{"%n", "you picked the wrong", "netgame fool"},
-+	{"%n", "is gonna go play", "minecraft"},
-+	{"%n", "ragequitted"},
-+	{"%n", "is sleeping", "with the fishes"},
-+	{"%n", "made an ouchie"},
-+	{"%n", "will be remembered"},
-+	{"that ain't", "%n"},
-+	{"%n", "got wombo combo'd"},
-+	{"%n", "insert more credits", "to continue"},
-+	{"what was", "%n", "fighting for"},
-+	{"%n", "divided by 0"},
-+	{"%n", "had a whoopsie"},
-+	{"%n", "failed at life"},
-+	{"%n", "fell out of", "the world"},
-+	{"%n", "had a bad time"},
-+	{"%n", "got dunked on"},
-+	{"%n", "went boom"},
-+	{"%n", "ascended"},
-+	{"%n", "got censored"},
-+	{"%n", "felt the burn"},
-+	{"%n", "was purged"},
-+	{"%n", "was diagnosed", "with karted"},
-+	{"%n", "fell rock bottom"},
-+	{"guess", "%n", "will die"},
-+	{"%n", "crashed"},
-+	{"playtime", "is over for", "%n"},
-+	{"have a", "rotten day", "%n"},
-+	{"%n", "got assassinated"},
-+	{"%n", "won't be remembered"},
-+	{"%n", "got the bad ending"},
-+	{"%n", "got isekai'd"},
-+	{"Yippee Ki-Yay", "%n"},
-+	{"See you never", "%n"},
-+	{"Boom goes", "%n"},
-+	{"KAPOW", "%n"},
-+	{"GET OUT OF", "MY HOUSE", "%n"},
-+	{"LUL", "%n"},
-+	{"OMEGALUL", "%n"},
-+	{"Sorry not sorry", "%n"},
-+	{"Sorry", "%n"},
-+	{"Here's a tissue", "%n"},
-+	{"%n", "was sent", "back to school"},
-+	{"%n", "passes his turn", "and goes to prison"},
-+	{"%n", "got grounded"},
-+	{"%n", "got claimed by death"},
-+	{"%n", "got outplayed"},
-+	{"%n", "is doomed"},
-+	{"%n", "didn't git gud"},
-+	{"%n", "got owned"},
-+	{"%n", "got pwned"},
-+	{"eyes on the road", "%n"},
-+	//{"%n", "didn't play", "on difficulty"},
-+	{"%n", "got murdered"},
-+	{"%n", "asked for the", "v2 release date"},
-+	{"it really do", "be like that", "%n"},
-+	{"there goes", "%n"},
-+	{"%n", "was sponsored by", "RAID SHADOW LEGENDS"},
-+	{"%n", "can't lose here"},
-+	{"nice driving", "%n"},
-+	//{"hippity hoppity", "%n", "is gone-ity"},
-+	{"%n", "got a call", "from their mom"},
-+	{"%n", "lagged"},
-+	{"Time to put", "%n", "to rest"},
-+	{"cya later", "alligator", "%n"},
-+	{"%n", "ate one too", "many banana"},
-+	{"wtf", "%n"},
-+	{"wth", "%n"},
-+	{"%n", "is gonna", "meet god"},
-+	{"%n", "is gonna", "meet satan"},
-+	{"%n", "commited sudoku"},
-+	{"%n", "didn't get", "the right item"},
-+	{"fission mailed", "%n"},
-+	{"%n", "was a worthless", "consumer model"},
-+	{"%n", "please"},
-+	{"%n", "pls"},
-+	{"%n", "please wait"},
-+	{"%n", "be patient"},
-+	{"you did good", "%n"},
-+	{"how was your game", "%n"},
-+	{"we live in", "a society", "%n"},
-+	{"try switching", "to metal sonic", "%n"},
-+	{"hahahaha", "%n", "soccer"},
-+	{"suspect", "%n", "apprehended"},
-+	{"%n", "played at 512", "draw distance"},
-+	{"%n", "played it like", "it was mario kart"},
-+	{"%n", "is going back", "to mario kart"},
-+	{"%n", "got denied"},
-+	{"%n", "got BSOD'd"},
-+	{"%n", "was typing", "during the race"},
-+	{"%n", "had a bruh moment"},
-+	{"%n", "didn't leave", "the danger zone"},
-+	{"%n", "was lost in thoughts"},
-+	{"no SPB was", "required for", "%n"},
-+	{"later", "%n"},
-+	{"%n", "was never real"},
-+	{"%n", "who?"},
-+	{"%n", "became nothing"},
-+	{"%n", "was arrested", "for DUI"},
-+	{"%n", "was just", "your imagination"},
-+	{"%n", "woke up from", "a bad dream"},
-+	{"%n", "didn't get", "the right item"},
-+	{"%n", "shouldn't have", "picked that character"},
-+	{"%n", "thought it", "was normal speed"},
-+	{"%n", "broke the", "ping limit"},
-+	{"%n", "opened their heart"},
-+	{"begone", "%n"},
-+	{"%n", "blames the ping"},
-+	{"%n", "had controller issues"},
-+	{"Too much SPEEN for", "%n"},
-+	{"You know", "%n", "has the blues"},
-+	{"%n", "has been erased", "from history"},
-+	{"Your free trial", "of existing has ended", "%n"},
-+	{"You gotta get", "better at this", "%n"},
-+	{"Even without wings", "%n", "Can still fly"},
-+	{"%n", "went to Brazil"},
-+	{"Please fucking cry now", "%n"},
-+	{"%n", "was just a regular", "hedgehog after all"},
-+	{"Git gud", "%n"},
-+	{"Become proficient", "%n"},
-+	{"%n", "To die why..."},
-+	{"Watch out", "%n", "You're gonna crash! AHHH!"},
-+	{"%n", "is now off", "to the gulag"},
-+	{"%n", "is dead", "not big suprise"},
-+	{"Stay free", "%n"},
-+	{"%n", "savoured it thoroughly"},
-+	{"%n", "bites the dust"},
-+	{"%n", "was banished to", "the shadow realm"},
-+	{"The future refused", "to change for", "%n"},
-+	{"%n", "took a tumble"},
-+	{"%n", "threw the match...", "how pitiful"},
-+	{"%n", "uninstalled"},
-+	{"%n", "got in one fight", "and their mom got scared"},
-+	{"So long, space", "%n"},
-+	{"%n", "noclipped out", "of reality"},
-+	{"%n", "is pining for", "the fjords"},
-+	{"%n", "wasn't carried", "by AiAi"},
-+	{"%n", "didn't lawnmower", "hard enough"}, 
-+	{"%n", "wasn't able to", "conduct ME TRAIN"},
-+	{"%n","scaled these","announcements"},//I am so fucking done trying to scale these motherfuckers holy shit
-+	{"%n","didn't escape from","the city"},
-+	{"music made","%n","loose control"},
-+	{"maybe in another life","%n"},
-+	{"%n","failed the vibe check"},
-+	{"%n","SIGSEGV'D"},
-+	{"%n","ate those words"},
-+	{"bye have a","beautiful time","%n"},
-+	{"%n","was VAC banned","from secure server"},
-+	{"%n","was no contest"},
-+	{"%n","license and","registration please"},
-+	{"%n","was not the imposter"},
-+	{"%n","was the imposter"},
-+	{"%n","couldn't escape","crossing fate"},
-+	{"%n","kneels"},
-+	{"%n","repacked","bonuschars.kart"},
-+	{"%n","was claimed","by the zone"},
-+	{"%n","unlocked easy","difficulty"},
-+	{"%n","entered absolute","territory"},
-+	{"witness me","%n"},
-+	{"%n","rides eternal,","shiny and chrome"},
-+	//{"%n","gained","PF-TIMEOVER"}, //second thought this one isn't really funny
-+	{"%n","left the game","<sync failure>"},
-+	{"%n","deleted sys32"},
-+	{"%n","blocked low"},
-+	{"%n","blocked high"},
-+	{"this is the","wrong room","%n"},
-+	{"%n","your legs are","not okay"},
-+	{"in water","%n","will drown"},
-+	{"%n","is going home","in a box"},
-+	{"texture","%n","has no width!"},
-+	{"%n","committed existn't"},
-+	{"%n","was jeckpoint'd"},
-+	{"%n","modified useodds"},
-+	//{"%n","out of memory","allocating 78169235 bytes"}, //too long and not funny
-+	{"%n","attained escape","velocity"},
-+	{"%n","had p.spectator","set to true"},
-+	{"orbinaut plus","%n","creates corpse"},
-+	{"end of the line","%n"},
-+	{"%n","choked"},
-+	{"%n","rolled an SPB"},
-+	{"%n","got a single","shoe in 12th"},
-+	{"%n","has no mouth","and must scream"},
-+	{"god issued a","total recall on","%n"},
-+	{"%n","can't drive 55"},
-+	{"%n","downloaded a car"},
-+	{"SORRY","     ","NOTHING"}, //heh
-+	{"%n","didn't get","on the ball"},
-+	{"mighty putty fixes","everything but","%n"},
-+	{"flex tape","couldn't seal","%n"},
-+	{"%n","was forsaken"},
-+	{"%n","is gonna carry","that weight..."},
-+	{"%n","pinged retrostation"}, //can't wait to get an angry message about this one //UPDATE: angry message recieved
-+	{"%n","committed persona 3"},
-+	{"%n","never saw it coming"},
-+	{"i can't believe","%n","is dead"},
-+	{"error code 404","%n","not found"},
-+	{"%n","is out of touch"},
-+	{"%n","was marked","for death"},
-+	{"wake me up","%n"},
-+	{"%n","can't wake up"},
-+	{"%n","had rapid mid-drive","disassembly"}
-+}
-+
-+local chosenAnnouncement = 1
-+local function printAnnouncement(tsx, tsy)
-+	local toPrint = announcements[chosenAnnouncement]
-+	//local lasttsy = 0
-+	//local laststr = ""
-+	//print("tsx/FRAC:"+tsx/FRACUNIT+" tsy/FRAC:"+tsy/FRACUNIT)
-+	for i = 1,table.getn(toPrint)
-+		//if(laststr ~= toPrint[i]) then print("==WRITE ME UP INSIDE: "+toPrint[i]) end
-+		//laststr = toPrint[i] //OH MY FUCK DEBUG MESSAGES ARE COMING OUT OF MY EYES
-+		local realtsy = tsy + (i*14) - 40
-+		//local realtsy = tsy + (i*FRACUNIT*8)-40*FRACUNIT //WHY WONT YOU JUST SCALE 
-+		//if lasttsy ~= realtsy then print("realtsy/FRAC:"+realtsy/FRACUNIT) end
-+		local s = toPrint[i] //haah fuck this doesn't work
-+		if s == "%n" then s = elim.diedName end
-+		drawStringMkII(tsx, realtsy, string.upper(s), FONT_KART2, V_SNAPTOTOP|V_40TRANS, {align="center",color=SKINCOLOR_BROWN})
-+	end
-+end
-+
-+
-+
-+
-+
-+-- [ strashEdit ] --
-+-- just factoring this part
-+local function _respawnEliminatedPlayer(p)
-+	if p.elim_rejoinEnd and p.spectator then
-+		p.spectator = false
-+		if p.pflags&PF_WANTSTOJOIN then
-+			p.pflags = p.pflags^^PF_WANTSTOJOIN
-+		end
-+	end
-+end
-+
-+local function _respawnEliminatedPlayers()
-+	for p in players.iterate do
-+		_respawnEliminatedPlayer(p)
-+	end
-+end
-+
-+-- for the mods that end the round themselves because they need to display something
-+-- at the end of the race or whatever
-+local function _endElimRound()
-+	COM_BufInsertText(server, "allowteamchange 1")
-+	//chatprint("\x83<SERVER> End of round! Team change is now allowed.")
-+	local place = 0 //place they finished (but actually the minutes displayed in realtime
-+	local minutes = 0 //minutes they survived (but actually the seconds displayed in realtime
-+	local seconds = 0 //seconds survived (but actually the centiseconds displayed in realtime
-+	for p in players.iterate do //oh my god this is a hack				
-+		if p.eliminatedtime and p.eliminatedpos then //basically we are calculating time survived
-+			place = TICRATE*60*p.eliminatedpos //but because of results screen im going to force these numbers to play nice
-+			minutes = p.eliminatedtime/(60*TICRATE)
-+			seconds = (p.eliminatedtime-(minutes*60*TICRATE))/TICRATE
-+			//seconds = (p.eliminatedtime-(p.eliminatedtime/(60*TICRATE)))/100
-+			//print("DEBUG: place: " + place + " / minutes: " + minutes + " / seconds: " + seconds)
-+		else //they weren't eliminated or something went wrong
-+			place = TICRATE*60 //more than likely they are the winner
-+			minutes = p.realtime/(60*TICRATE)
-+			seconds = (p.realtime-(minutes*60*TICRATE))/TICRATE					
-+		end
-+		p.realtime = place+(minutes*TICRATE)+(seconds*TICRATE/100)
-+		if not p.spectator then
-+			chatprint("\x83<SERVER> "..p.name.." survived!")
-+		end
-+		//if p.eliminatedtime then p.realtime = p.eliminatedtime end
-+		//if p.eliminatedpos then p.kartstuff[k_position] = p.eliminatedpos end
-+	end
-+	G_ExitLevel()
-+	for p in players.iterate do if p.valid
-+		S_StopMusic(p)
-+		if p.exiting or (p.eliminatedpos and p.eliminatedpos <= 3) then
-+			S_ChangeMusic("KROK", true, p)
-+			//print(p.name.." playing KROK (placed "..p.eliminatedpos..")")
-+		elseif p.eliminatedpos <= elim.startpcount/2 //tophalf
-+			S_ChangeMusic("RACENT", true, p)
-+			//print(p.name.." playing RACENT (placed "..p.eliminatedpos..")")
-+		else
-+			S_ChangeMusic("KRLOSE", true, p)
-+			//print(p.name.." playing KRLOSE (placed "..p.eliminatedpos..")")
-+		end
-+		-- [ strashEdit ]
-+		-- this part has been factored
-+		_respawnEliminatedPlayer(p)
-+		--
-+	end end
-+end
-+-- --
-+
-+
-+COM_AddCommand("forcewin", function()
-+	elim.started = true
-+	elim.win = true
-+end, 1)
-+
-+COM_AddCommand("elim_srreset",function(p)
-+	if not el_scorereport.value then
-+		CONS_Printf(p, "\133Score report is not on. \128But the round number for scores was reset to 1 anyways.")
-+	end
-+	print("Score report round number was reset to 1.")
-+	server.roundnumber = 1
-+end, 1)
-+
-+COM_AddCommand("elim_srround",function(p, numrounds)
-+	if not numrounds then
-+		CONS_Printf(p, "Current round: "..server.roundnumber)
-+		CONS_Printf(p, "\133Usage: \128'el_scorereportround <round number>' (will set the current round to the provided number)")
-+		return
-+	end
-+	local nr = tonumber(numrounds)
-+	if not nr or nr <= 0 then
-+		CONS_Printf(p, "\133***WHAT ARE YOU TRYING TO DO***") //I liked this format a lot that tyron used, bless him
-+		return
-+	end
-+	if not el_scorereport.value then
-+		CONS_Printf(p, "\133Score report is not on. \128But the round number for scores was set to "..numrounds.." anyways.")
-+	end
-+	print("Round number was set to "..numrounds.." manually.")
-+	server.roundnumber = nr
-+end, 1)
-+
-+addHook("NetVars", function(x)
-+	elim = x($)
-+end)
-+
-+addHook("IntermissionThinker", function()
-+	if elim.scoreannounce == true then return end
-+	elim.scoreannounce = true
-+	if elim.on then //also jamming this in here lmao
-+		if el_spbdefault.value == "On" and CV_FindVar("selfpropelledbomb").value == 0 then
-+			COM_BufInsertText(server, "selfpropelledbomb 1")
-+		elseif el_spbdefault.value == "Off" and CV_FindVar("selfpropelledbomb").value == 1 then
-+			COM_BufInsertText(server, "selfpropelledbomb 0")
-+		end
-+		//okay update this fucking broke replays and I am pissed
-+		//this will only flop if elimination was disabled prior to the thinker running
-+		//at this point I dont even care anymore fuck
-+		if el_enabled.value == 0 then
-+			COM_BufInsertText(server, "numlaps "..elim.maplaps)
-+			COM_BufInsertText(server, "basenumlaps \034Map Default\034")
-+		end
-+		COM_BufInsertText(server, "allowteamchange 1")
-+	end
-+	
-+	-- [ strashEdit ] --
-+	-- incase of external 'exitlevel' call
-+	_respawnEliminatedPlayers()
-+	--
-+	
-+	if not el_scorereport.value then return end
-+	local roundnum = "???"
-+	if server.roundnumber then roundnum = server.roundnumber end
-+	print("===== SCORE REPORT: ROUND #"..roundnum.." =====")
-+	print("\133"..string.upper(mapheaderinfo[gamemap].lvlttl).." "..string.upper(mapheaderinfo[gamemap].zonttl))
-+	print("\131##\128| \131NAME                  \128| \131PTS")
-+	local sortedplayers = {}
-+	//print("storing players")
-+	for p in players.iterate do
-+		if p and p.valid then
-+			//print(p.name.." "..p.marescore)
-+			if p.score ~= nil then table.insert(sortedplayers, p) end
-+		end
-+	end
-+	//print("table sorting")
-+	table.sort(sortedplayers,function(a, b)
-+		return a.score > b.score
-+	end)
-+	local i = 0
-+	//print("printing list")
-+	for _, q in ipairs(sortedplayers)
-+		i=$+1
-+		local pos = string.format("%02i",i)
-+		local pname = string.format("%-21s",q.name)
-+		local pscore = string.format("%4s",q.score)
-+		print("\130"..pos.."\128| "..pname.." |\132"..pscore)
-+	end
-+	server.roundnumber = $+1
-+end)
-+
-+addHook("MobjThinker", function(m) //dirty
-+	if m.lived == nil then m.lived = 0 end
-+	m.lived = $+1
-+
-+	if m and m.valid and m.lived > 1 then
-+		if m.tied and m.tied.valid and m.tied.player and m.tied.player.valid and not m.tied.player.spectator and m.tied.player.needOrbit then
-+			local p = m.tied.player
-+			local pm = m.tied
-+
-+			local thisAng = leveltime*(ANG2*3)
-+			local x,y = cSpd(thisAng+m.angmod, (elim.curtime/2)*FRACUNIT, pm)
-+			P_TeleportMove(m, pm.x+x, pm.y+y, pm.z)
-+		else
-+			P_RemoveMobj(m)
-+			return
-+		end
-+	end
-+end, MT_ELIMWARNING)
-+
-+addHook("MapLoad", function(mapnum)
-+	resetElim()
-+	if not server.roundnumber then server.roundnumber = 1 end
-+	elim.maplaps = mapheaderinfo[mapnum].numlaps //to be used during intermission, thank you based jugador -freeman
-+	local playercount = 0
-+	for p in players.iterate do if p and p.valid then
-+		if not p.spectator then playercount = $+1 end
-+	end end
-+	if el_enabled.value then elim.on = true end	
-+	-- [ strashEdit ] --
-+	-- yeah, I'm gonna go with "just play the map normally" if on
-+	-- a non-looping track"
-+	if elim.on and (mapheaderinfo[mapnum].levelflags & LF_SECTIONRACE) then
-+		print("Sorry, non-looping maps can't be played in elim mode")
-+		chatprint("\129Elimination\130 can't be played on \136section maps\130, sorry...")
-+		elim.on= false
-+	end
-+	-- --
-+	if el_minplayers.value != 0 then
-+		if playercount < el_minplayers.value then
-+			elim.on = false
-+			print("Elimination disabled: below minimum player count ("..el_minplayers.value..")")
-+			//local maplaps = mapheaderinfo[mapnum].numlaps //thank you based jugador -freeman
-+			COM_BufInsertText(server, "numlaps "..elim.maplaps)
-+			COM_BufInsertText(server, "basenumlaps \034Map Default\034")
-+			COM_BufInsertText(server, "allowteamchange 1")
-+		end
-+	end
-+	if elim.on and el_spbgone.value > 0 then
-+		if playercount < el_spbgone.value then
-+			COM_BufInsertText(server, "selfpropelledbomb 0")
-+			print("\133SPB Disabled: below player count \131("..playercount.."/"..el_spbgone.value..")")
-+			if el_lightninggone.value then
-+				COM_BufInsertText(server, "thundershield 0")
-+			end
-+		else
-+			COM_BufInsertText(server, "selfpropelledbomb 1")
-+			if el_lightninggone.value then
-+				COM_BufInsertText(server, "thundershield 1")
-+			end
-+			//print("SPB was enabled.")
-+		end
-+	end
-+	if el_test.value == 1 then elim.test = true end
-+
-+	for p in players.iterate do
-+		p.elim_rejoinEnd = false --if even
-+		p.eliminatedtime = 0
-+		p.eliminatedpos = 0
-+		p.elimlastmanannounce = 0 //timer for LAST MAN STANDING message
-+		p.elimlastmanodds = 0 //how many players you're up against when solo, used to determine how clutch you are LMAO DIDNT FINISH YET ASKDGHASKGFH
-+	end
-+end)
-+
-+
-+addHook("ThinkFrame", function() if elim.on and leveltime > 2 then // START THINKFRAME ---------------------------------------
-+//print("===lmao el_timescaled*ticrate is "+elim.el_timescaled*TICRATE)
-+// Check some stuff prior to starting\
-+if leveltime == 10 then
-+	if (mapheaderinfo[gamemap].levelflags & LF_SECTIONRACE) then
-+		G_ExitLevel()
-+		print("Non-looping tracks are not supported! Ending map immediately.")
-+	else
-+		COM_BufInsertText(server, "numlaps 50") // So elim runs uninterrupted
-+		COM_BufInsertText(server, "basenumlaps 50") // Set this here so replays work jesus christ
-+		COM_BufInsertText(server, "allowteamchange 1")
-+		//chatprint("\x83<SERVER> Team change allowed. Join in!")
-+	end
-+	//im so fucking sorry this is probably terrible -freeman
-+	for p in players.iterate do
-+		//print("Checking "..p.name.." for PF_WANTSTOJOIN.")
-+		if p.pflags&PF_WANTSTOJOIN then
-+			//print("Turned off PF_WANTSTOJOIN for "..p.name..".")
-+			p.pflags = p.pflags^^PF_WANTSTOJOIN
-+		end
-+	end
-+	//the reason I am doing this is to stop a bug from manifesting where people eliminated pre-game
-+	//are dumped back in the game immediately due to this flag, causing desyncs
-+end
-+
-+//im sorry im sorry this horrific hack is here to turn booststack nerfing from slipstream off
-+//this was required because permission to edit slipstream and acro is not feasible to get
-+//and the slipstream var always evaluates true from the acro check for it
-+//please never ever host this
-+//print("THINKINGFRAME.PNG")
-+if acrobatics != nil then
-+	//print("ACROCHECK IS YES")
-+	if booststacknerf == true then
-+		booststacknerf = false
-+		//print("BOOSTSTACKNERF MAKE YOU LOOSE CONTROL")
-+	end
-+end
-+
-+// Count live players! Also carry player pre-count actions
-+
-+local pcount = 0 // Total players
-+local lastpos = 0 // Last position recorded
-+local lastposp = 0 // How many players are in this position (would be COOL if there was ONLY ONE)
-+elim.livepcount = 0 // Count of live players
-+
-+local team1players = 0 //if friendmod, how many players on each team
-+local team2players = 0
-+
-+local randnumber = P_RandomRange(1,5) //last man sound clip
-+
-+local DEBUG_TEST = elim.test
-+
-+for p in players.iterate do if p and p.valid then
-+	local pk = p.kartstuff
-+	pcount = $+1
-+	if p.mo and p.mo.valid and not p.spectator then
-+		elim.livepcount = $+1
-+		if pk[k_position] > lastpos then
-+			lastpos = pk[k_position]
-+			lastposp = 0
-+		end
-+		if pk[k_position] == lastpos then
-+			lastposp = $+1
-+		end
-+		if elim.friendly and FRIENDMOD_TeamBattle() then
-+			if p.FRteam == 1 then
-+				team1players = $+1
-+			end
-+			if p.FRteam == 2 then
-+				team2players = $+1
-+			end
-+		end
-+	end
-+end end
-+
-+// Carry thinkframe actions, at last
-+// These include starting the game lol
-+
-+local elimstarttime = starttime + (el_stime.value*TICRATE)
-+
-+if leveltime == elimstarttime then // IT BEGINS
-+	elim.startpcount = 0
-+	for p in players.iterate do
-+		if p.mo and p.mo.valid and not p.spectator then
-+			elim.startpcount = $+1
-+			p.pingtime = -4 // (let's not forget)
-+		end
-+	end
-+	if elim.startpcount <= 1 then elim.sp = true end
-+	if DEBUG_TEST then elim.sp = false;elim.startpcount = 2 end // faked
-+
-+	if not elim.sp then // If there is more than 1 nerd,
-+		S_StartSound(nil, sfx_sdndth) // Play this sound too
-+		COM_BufInsertText(server, "allowteamchange 0")
-+		print("Team change privilege revoked.")
-+	end
-+	if el_timescaling.value == 1 and not elim.sp then
-+		if elim.startpcount <= el_scalingminplayers.value then
-+			elim.el_timescaled = el_scalingmaxtime.value 
-+		elseif elim.startpcount >= el_scalingmaxplayers.value then
-+			elim.el_timescaled = el_scalingmintime.value
-+		else //if it wasn't easy, fuck we have to do this nonsense below
-+			local playerdiff = el_scalingmaxplayers.value-el_scalingminplayers.value
-+			local timediff = el_scalingmaxtime.value-el_scalingmintime.value
-+			local timeperplayer = (timediff*TICRATE)/playerdiff //I am doing this so stuff counts for fractions of a second before its rounded lol int math
-+			elim.el_timescaled = max(el_scalingmaxtime.value-((timeperplayer*(elim.startpcount-el_scalingminplayers.value))/TICRATE),el_scalingmintime.value)
-+		end //essentially, adding a fraction of the time for each player above minimum
-+		elim.curtime = elim.el_timescaled*TICRATE
-+		print("Starting Players: "+elim.startpcount)
-+		print("Elimination time is "+elim.el_timescaled+" seconds per player this round.")
-+	else
-+		elim.curtime = el_time.value*TICRATE
-+	end
-+end
-+
-+local spbvalue = CV_FindVar("selfpropelledbomb").value
-+if el_spbgone.value > 1 and spbvalue == 1  and leveltime%3 == 0 then //the leveltime is so the console command has atic or two
-+	if elim.livepcount <= el_spbgone.value then //to go through, otherwise this runs valid twice
-+		COM_BufInsertText(server, "selfpropelledbomb 0")
-+		print("\133ELIMINATION: SPB disabled for the last "..el_spbgone.value.." players!")
-+		if el_lightninggone.value then
-+			COM_BufInsertText(server, "thundershield 0")
-+		end
-+	end
-+end
-+
-+if leveltime > elimstarttime then // IT HAS BEGUN
-+	elim.started = true
-+	elim.runtime = $+1
-+
-+	if not elim.sp and not DEBUG_TEST then
-+		if elim.livepcount <= 1 then
-+			elim.win = true
-+		end
-+		if elim.friendly and FRIENDMOD_TeamBattle() then
-+			if team1players <= 0 or team2players <= 0 then
-+				elim.win = true
-+			end
-+		end
-+	end
-+
-+	if not elim.win then
-+		elim.curtime = $-1 // Take some of that TIMER JUICE
-+
-+		if elim.livepcount < elim.prevlivepcount then
-+			// Live people dissapeared during the round, counter it by adding time to the timer
-+			// this accounts for spectators or HP mod or whatever
-+			// it also caps to the time between eliminations so it won't overflow the timer now
-+			if el_timescaling.value == 1 then
-+				elim.curtime = min(elim.el_timescaled*TICRATE,$+(elim.el_timescaled*TICRATE*3)/4)
-+			else
-+				elim.curtime = min(el_time.value*TICRATE,$+(el_time.value*TICRATE*3)/4)//adding only 75% of the timer to speed things up
-+			end
-+		end
-+		//this block determines if the last teammate of a team died and that player is now solo and outnumbered
-+		if elim.friendly and FRIENDMOD_TeamBattle() then
-+			if not elim.lastman then
-+				local unluckyguy = nil
-+				//print("team1players: "..team1players.." / team2players: "..team2players)
-+				if team1players > 1 and team2players == 1 then
-+					for p in players.iterate do if p and p.valid then
-+						if (not p.spectator) and p.FRteam == 2 then
-+							unluckyguy = p
-+							p.elimlastmanodds = team1players
-+							//print("unlucky lad: "..p.name)
-+						end
-+					end end
-+				end
-+				if team2players > 1 and team1players == 1 then
-+					for p in players.iterate do if p and p.valid then
-+						if (not p.spectator) and p.FRteam == 1 then
-+							unluckyguy = p
-+							p.elimlastmanodds = team2players
-+							//print("unlucky lad: "..p.name)
-+						end
-+					end end
-+				end
-+				//im so sorry
-+				if unluckyguy then
-+					elim.lastman = true
-+					unluckyguy.elimlastmanannounce = 6*TICRATE
-+					if randnumber == 1 then
-+						S_StartSound(nil, sfx_last1, unluckyguy)
-+					elseif randnumber == 2 then
-+						S_StartSound(nil, sfx_last2, unluckyguy)
-+					elseif randnumber == 3 then
-+						S_StartSound(nil, sfx_last3, unluckyguy)
-+					elseif randnumber == 4 then
-+						S_StartSound(nil, sfx_last4, unluckyguy)
-+					elseif randnumber == 5 then
-+						S_StartSound(nil, sfx_last5, unluckyguy)
-+					end
-+				end
-+			end
-+		end
-+		if elim.curtime < 0 then // Eliminate?
-+			chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
-+			elim.eliminate = true
-+			// We don't set the elimination time here - We do that later, AFTER we eliminate people
-+			if elim.curtime < -2*TICRATE then //-10*TICRATE overtime has no biz being 10 seconds long, 2 is more than enough
-+				// Wow, we're past schedule! Die now!
-+				chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
-+				elim.eliminatenow = true
-+			end
-+		else
-+			// Do not eliminate people if this isn't even 0 what the fuck
-+			elim.eliminate = false
-+			elim.eliminatenow = false
-+		end
-+	else
-+		//if elim.wintimer % 35 == 0 then
-+			//print("ELIM WIN: "..elim.wintimer/35)
-+		//end
-+		elim.wintimer = $+1
-+
-+		if elim.wintimer == 1
-+			for p in players.iterate do
-+				if not p.spectator then
-+					S_ChangeMusic("KBWIN", false, p)
-+				else
-+					S_ChangeMusic("KBOK", false, p)
-+				end
-+			end
-+		end
-+		// elim_win is true and X seconds passed (for the music to play) after a win?
-+		// End the level already, also play cute sounds
-+		if elim.wintimer > 10*TICRATE then
-+			-- [ strashEdit ] --
-+			-- factorized this part for compatibility
-+			_endElimRound()
-+			-- --
-+		end
-+	end
-+end
-+
-+if elim.diedTimer > 0 then elim.diedTimer = $-1 end
-+
-+local deathcount = 0 // Counts players killed in a single elimination event
-+
-+for p in players.iterate do if p and p.valid then
-+	if p.elim_rejoinEnd == nil then p.elim_rejoinEnd = false end // whether this player gets set to rejoin
-+	if p.pingtime == nil then p.pingtime = 10*TICRATE end
-+
-+	if p.needOrbit == nil then p.needOrbit = false end
-+	// p.objOrbit
-+	// needOrbit bool controls whether the player requires an orbiting set of objects around it
-+	// objOrbit just stores the first orbit object to check whether the player has one already
-+	if p.eliminatedpos == nil then p.eliminatedpos = 0 end
-+	if p.eliminatedtime == nil then p.eliminatedtime = 0 end
-+
-+	if p.elimlastmanannounce == nil then p.elimlastmanannounce = 0 end
-+	if p.elimlastmanannounce > 0 then p.elimlastmanannounce = $-1 end
-+	
-+	local pk = p.kartstuff
-+	p.needOrbit = false
-+
-+	--p.realtime = elim.curtime or 0
-+	//p.realtime = pk[k_position] + 69
-+
-+	local annoytime = min(max(2, elim.curtime/8), 2*TICRATE) // Don't want to deafen people
-+	p.pingtime = $ + 1
-+
-+	if p.mo and p.mo.valid then
-+		if not p.spectator and not elim.sp then
-+			local inLast = pk[k_position] == lastpos // self explanatory
-+
-+			if inLast then
-+				// If this player is in last place and we have to eliminate them
-+				// Or if the elimination time is past schedule...
-+				if (elim.eliminate and lastposp == 1) or elim.eliminatenow then
-+					p.elim_rejoinEnd = true
-+					deathcount = $+1
-+					p.eliminatedtime = p.realtime
-+					p.eliminatedpos = countPlayersInGame()
-+					pk[k_position] = p.eliminatedpos //hopefully fixes SPB targeting spectators
-+					local timestring = string.format("%i'%02i\34%02i",G_TicsToMinutes(p.realtime,true),G_TicsToSeconds(p.realtime),G_TicsToCentiseconds(p.realtime))
-+					chatprint("\x87<SERVER> "+p.name+" was eliminated at "+timestring+" in position "+countPlayersInGame())
-+					//print("===I GOT NO FUKIN CLUE HOW LUA WORKS: ",timestring)
-+					elim.diedName = p.name
-+					elim.diedTimer = 5*TICRATE
-+					P_SpawnMobj(p.mo.x, p.mo.y, p.mo.z, MT_SPBEXPLOSION) // boom
-+					S_StartSound(nil, sfx_noooo2, p) // NOOOOOOOOOOOOOOOO
-+					elim.livepcount = $-1 // well,
-+				end
-+			end
-+
-+			if leveltime > elimstarttime
-+			and inLast and not elim.win then
-+				if p.pingtime > annoytime then
-+					--print("beep")
-+					//S_StartSound(nil, sfx_kc39, p)
-+					S_StartSound(p.mo, sfx_kc3d)
-+					p.pingtime = 0
-+				end
-+				p.needOrbit = true
-+			else
-+				p.pingtime = 128*FRACUNIT
-+			end
-+		end
-+
-+		if p.needOrbit and p.mo and p.mo.valid then
-+			if not p.objOrbit or not p.objOrbit.valid then
-+				for i = 1,8 do
-+					local e = P_SpawnMobj(0,0,0,MT_ELIMWARNING)
-+					e.tied = p.mo
-+					e.angmod = ANGLE_45*i
-+					if i == 1 then p.objOrbit = e end
-+				end
-+			end
-+		end
-+
-+		if elim.win then
-+			if p.exiting == 0 then
-+				// Generally the losers are already spectating, so
-+				p.exiting = 1
-+				P_PlayVictorySound(p.mo)//I am here to duplicate vanilla behavior, not ask questions
-+				local exitsign = P_SpawnMobj(p.mo.x, p.mo.y, p.mo.z+(mapobjectscale*400),MT_SIGN)
-+				exitsign.target = p.mo
-+				exitsign.state = S_SIGN1
-+				exitsign.movefactor = p.mo.floorz
-+				exitsign.movecount = 1
-+			end
-+			if p.elim_rejoinEnd then
-+				if leveltime > starttime + (el_stime.value*TICRATE) then
-+					p.pflags = $|PF_WANTSTOJOIN
-+					p.elim_rejoinEnd = false
-+				end
-+			end
-+		end
-+		if p.elim_rejoinEnd then
-+			p.spectator = true
-+		end
-+	end
-+end end
-+
-+elim.prevlivepcount = elim.livepcount // Don't use prevlivepcount past this line
-+
-+if deathcount > 0 then // At least one player died this tic
-+	elim.eliminate = false
-+	elim.eliminatenow = false
-+	if deathcount > 1 then elim.diedName = "Multiple racers" end
-+	//print("\x87"..elim.diedName.." got eliminated!")
-+
-+	for p in players.iterate do if p and p.valid then
-+		S_StartSound(nil, sfx_kc48, p)
-+		//if elim.livepcount <= 1 then //moved up to win timer config
-+			//if not p.spectator then
-+				//S_ChangeMusic("KBWIN", false, p) //survived moved up to score calculation
-+				//chatprint("\x83<SERVER> "..p.name.." survived!")
-+			//else
-+				//S_ChangeMusic("KBOK", false, p)
-+			//end
-+		//end
-+
-+	end end
-+	if el_timescaling.value == 1 then
-+		elim.curtime = elim.el_timescaled*TICRATE
-+	else	
-+		elim.curtime = el_time.value*TICRATE
-+	end
-+end
-+end end)
-+
-+hud.add(function(v,p,c)
-+if p and p.valid then
-+if not elim.on then
-+	hud.enable("gametypeinfo")
-+	hud.enable("freeplay")
-+	hud.enable("time")
-+end
-+if elim.on then
-+	hud.disable("gametypeinfo")
-+	hud.disable("freeplay")
-+	hud.disable("time")
-+	local DEBUG_TEST = elim.test
-+
-+	--x, y, str, font, flags, extra
-+	//drawStringMkII(320*FRACUNIT, (200-7)*FRACUNIT, "ELIMINATION", FONT_KART2, V_SNAPTOBOTTOM|V_SNAPTORIGHT, {style=FS_FIXED, scale=FRACUNIT/2, color=3, align="right"})
-+
-+	/*
-+	if splitscreen then // limited support
-+		local sx,sy = 320-64, 30
-+		drawMKtext("ELM:", sx, sy, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
-+
-+		local textd = "xx"
-+		if elim_wait then textd = "--"
-+		else
-+			if elim_curtime > -3 then
-+				textd = elim_curtime/TICRATE
-+			else
-+				textd = "TIE '"..((elim_curtime/TICRATE)+10).."'"
-+			end
-+		end
-+		if elim_startpcount <= 1 then textd = "1p" end
-+		if elim_win then textd = "end" end
-+		drawMKtext(textd, sx, sy+14, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
-+	end*/
-+
-+	local ttx,tty = 270, 4 //248, 10
-+
-+	local rtext,rcol = "",3
-+	local ttext,tcol = "",3
-+	if elim.started then // Text mod
-+
-+		if not elim.sp then
-+			local xleft = elim.livepcount.." LEFT"
-+			rtext = xleft
-+			ttext = string.format("%02d",(elim.curtime / TICRATE))
-+
-+			if elim.curtime >= 0 and elim.curtime < 10*TICRATE then
-+				if (leveltime/4)%2 == 1 then tcol = SKINCOLOR_RED end
-+				if elim.curtime < 5*TICRATE  then
-+					if (leveltime/6)%3 == 0 then ttext = ">  "..ttext.."  <" end
-+					if (leveltime/6)%3 == 1 then ttext = " > "..ttext.." < " end
-+					if (leveltime/6)%3 == 2 then ttext = ">  >"..ttext.."<  <" end
-+				end
-+			end
-+			if elim.curtime < 0 then
-+				rtext = "OVERTIME"
-+				ttext = (elim.curtime / TICRATE) + 1 //+9
-+
-+				rcol = ((leveltime/4)%2 == 1) and SKINCOLOR_RED or SKINCOLOR_RUBY
-+				tcol = ((leveltime/4)%2 == 0) and SKINCOLOR_RED or SKINCOLOR_RUBY
-+			end
-+		else
-+			rtext = "WAITING"
-+			ttext = "---"
-+		end
-+
-+		if elim.win then
-+			rtext = "FINISH"
-+			ttext = "---"
-+
-+			rcol = ((leveltime/4)%2 == 1) and SKINCOLOR_YELLOW or SKINCOLOR_GOLD
-+			tcol = ((leveltime/4)%2 == 0) and SKINCOLOR_YELLOW or SKINCOLOR_GOLD
-+		end
-+
-+	else
-+		rtext = "PREGAME"
-+		if DEBUG_TEST then rtext = "TEST MODE" end
-+
-+		ttext = "- "..string.format("%02d",(((starttime + el_stime.value*TICRATE) - leveltime)/TICRATE)).." -"
-+	end
-+
-+	// Status
-+	drawStringMkII(ttx, tty, rtext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_20TRANS, {color=rcol,align="center"})
-+	// Time
-+	drawStringMkII(ttx, tty+16, ttext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_10TRANS, {color=tcol,align="center"})
-+	
-+	-- [ strashEdit ] --
-+	-- Moving this outside this scope
-+	-- so that 'Elim_util_printRandomDeathAnnouncement' can work...
-+	--if el_announcements.value == 1 then
-+	--	if elim.diedTimer > 0 then
-+	--		//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
-+	--		local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
-+	--		printAnnouncement(tsx, tsy)
-+	--		//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
-+	--	end
-+	--end
-+	-- --
-+
-+	local sofmul = 4
-+	local maxp = 2*sofmul
-+	if not elim.sp and p.pingtime ~= nil and p.pingtime <= maxp then
-+		local tflag = V_10TRANS * ((p.pingtime/sofmul) + (9-2))
-+		v.draw(0, 0, v.cachePatch("REDSCR"), tflag)
-+	end
-+	local timestring = string.format("%i'%02i\34%02i",G_TicsToMinutes(p.realtime,true),G_TicsToSeconds(p.realtime),G_TicsToCentiseconds(p.realtime))
-+	//v.drawString(320-72, 20, "TIME",V_SNAPTOTOP,"center")
-+	v.drawString(ttx,35,timestring,V_SNAPTOTOP|V_SNAPTORIGHT|V_20TRANS,"center")
-+	local lastmanflash = 0
-+	if p.elimlastmanannounce and p.elimlastmanannounce % 35 > 12 then
-+		lastmanflash = V_HUDTRANSHALF
-+	end
-+	if p.elimlastmanannounce>0 then
-+		v.drawString(160,50,"!! LAST MAN STANDING !!",lastmanflash|V_SNAPTOTOP|V_REDMAP,"center")
-+	end
-+	
-+	//replacement for timer on the HUD
-+	//drawMKtext(DEBUGDRAW_LASTPOS.."-"..DEBUGDRAW_LASTPOSP, 64, 64, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
-+	//drawMKtext((eliminate and "true" or "false"), 64, 64+14, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
-+
-+	//(eliminate and lastposp == 1) or elim_curtime < -10*TICRATE
-+
-+end
-+	-- [ strashEdit ] --
-+	if el_announcements.value == 1 then
-+		if elim.diedTimer > 0 then
-+			//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
-+			local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
-+			printAnnouncement(tsx, tsy)
-+			//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
-+		end
-+	end
-+	-- --
-+end
-+end, "game")
-+
-+rawset(_G, "Elimination", function(...) //lets other scripts tell if elimination is running
-+	return elim.on
-+end)
-+
-+
-+-- [ strashEdit ]
-+-- for outside scripts that may call 'G_Exitlevel' or 'exitlevel' by themselves
-+-- so that they can respawn back eliminated players
-+rawset(_G, "Elim_respawnEliminatedPlayers", _respawnEliminatedPlayers)
-+rawset(_G, "Elim_endWinRound", _endElimRound)
-+
-+rawset(_G, "Elim_util_printRandomDeathAnnouncement", function(playerName)
-+	chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
-+	elim.diedName = playerName
-+	elim.diedTimer = 5*TICRATE
-+end)
-+rawset(_G, "Elim_util_diedTimerTic", function()
-+	if elim.diedTimer>0 then
-+		elim.diedTimer= $-1
-+	end
-+	return elim.diedTimer
-+end)
-+rawset(_G, "Elim_util_started", function()
-+	return elim.started
-+end)
-+-- --
-+	
-\ No newline at end of file
-diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA_EL.txt
---- KL_EliminationR2_v1/LUA_EL.txt	2021-08-12 10:47:17.296511568 +0200
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL.txt	1970-01-01 01:00:00.000000000 +0100
-@@ -1,1267 +0,0 @@
--//elimination, original work by Amperbee aka Rapidgame7#1949
+diff -ru KL_EliminationR2_v1/LUA_EL KL_EliminationR2_v1.strashEdit.r001/LUA_EL
+--- KL_EliminationR2_v1/LUA_EL	2021-08-21 09:59:27.959016367 +0200
++++ KL_EliminationR2_v1.strashEdit.r001/LUA_EL	2021-08-21 10:08:48.161675576 +0200
+@@ -1,128 +1,46 @@
+ //elimination, original work by Amperbee aka Rapidgame7#1949
 -//this is elimination R2 which I have finally gotten enough courage to release by freeman#7626
 -//the original script is by Amperbee, this is mostly just a heavily modified version of it
 -//that i've done with permission from them (and they have been kind enough to allow me to re-release it)
--
--//hannu has invented and or used this method below for optimization
--//i have been told it is faster but I still want to die
--local TICRATE = TICRATE
--local FRACUNIT = FRACUNIT
--
++//NVJR elimination most kludging done by freeman#7626 and galactice (with permission)
+ 
+ //hannu has invented and or used this method below for optimization
+ //i have been told it is faster but I still want to die
+ local TICRATE = TICRATE
+ local FRACUNIT = FRACUNIT
+ 
 -//turns elim on or off
 -local el_enabled = CV_RegisterVar({
 -	name = "elimination",
@@ -1383,8 +113,26 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 -	defaultvalue = 25, 
 -	flags = CV_NETVAR, 
 -	possiblevalue = CV_Natural})
--
--//dumps all players scores into the log round end, tourney mostley
++local el_enabled = CV_RegisterVar({"elimination", "On", CV_NETVAR|CV_SHOWMODIF, CV_OnOff})
++local el_time = CV_RegisterVar({"elim_time", "15", CV_NETVAR, CV_Natural})
++local el_stime = CV_RegisterVar({"elim_starttime", "60", CV_NETVAR, CV_Natural})
++local el_announcements = CV_RegisterVar({"elim_announcements", "On", CV_SHOWMODIF, CV_OnOff})
++
++local el_minplayers = CV_RegisterVar({"elim_minplayers", 0, CV_NETVAR|CV_SHOWMODIF, CV_Natural})
++//by popular demand
++
++local el_spbgone = CV_RegisterVar({"elim_spbgone", 0, CV_NETVAR, {MIN=0,MAX=9999}})
++local el_lightninggone = CV_RegisterVar({"elim_lightninggone", "Off", CV_NETVAR, CV_OnOff})
++local el_spbdefault = CV_RegisterVar({"elim_spbdefault", "On", CV_NETVAR, CV_OnOff})
++
++local el_timescaling = CV_RegisterVar({"elim_timescaling", "Off", CV_NETVAR, CV_OnOff})
++local el_scalingminplayers = CV_RegisterVar({"elim_scalingminplayers", "2", CV_NETVAR, {MIN=1,MAX=200}})
++local el_scalingmaxplayers = CV_RegisterVar({"elim_scalingmaxplayers", "12", CV_NETVAR, {MIN=1,MAX=200}})
++local el_scalingmintime = CV_RegisterVar({"elim_scalingmintime", "10", CV_NETVAR, CV_Natural})
++local el_scalingmaxtime = CV_RegisterVar({"elim_scalingmaxtime", "25", CV_NETVAR, CV_Natural})
+ 
++local el_scorereport = CV_RegisterVar({"elim_scorereport", "Off", CV_NETVAR, CV_OnOff})
+ //dumps all players scores into the log round end, tourney mostley
 -local el_scorereport = CV_RegisterVar({
 -	name = "elim_scorereport", 
 -	defaultvalue = "Off", 
@@ -1398,432 +146,47 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 -	defaultvalue = "Off", 
 -	flags = CV_NETVAR|CV_NOSHOWHELP, 
 -	possiblevalue = CV_OnOff})
--
---- local slotmod_prng_local_t = 0
---- local slotmod_prng_local_x = 6278
---- local slotmod_prng_local_y = 975
---- local slotmod_prng_local_z = 39207
---- local slotmod_prng_local_w = 45678
----
---- local function N_Random()
--	-- slotmod_prng_local_t = slotmod_prng_local_x ^^ (slotmod_prng_local_x << 11)
--	-- slotmod_prng_local_x, slotmod_prng_local_y, slotmod_prng_local_z, slotmod_prng_local_w = slotmod_prng_local_y, slotmod_prng_local_z, slotmod_prng_local_w, slotmod_prng_local_w ^^ (slotmod_prng_local_w >> 19) ^^ slotmod_prng_local_t ^^ (slotmod_prng_local_t >> 8)
--	-- return slotmod_prng_local_w
---- end
----
---- local function N_RandomRange(a, b)
--	-- return a + abs(N_Random() % (b - a + 1))
---- end
--
--freeslot("MT_ELIMWARNING", "S_VISIBLE", "SPR_EPIC")
--mobjinfo[MT_ELIMWARNING] = {
--	spawnhealth = 9,
--	spawnstate = S_VISIBLE,
--	radius = 5,
--	height = 5,
--	flags = MF_NOGRAVITY|MF_NOCLIP|MF_NOCLIPHEIGHT
--}
--states[S_VISIBLE] = {
--	sprite = SPR_EPIC,
--	frame = A|FF_FULLBRIGHT,
--	tics = -1,
--	nextstate = S_NULL,
--}
--
--freeslot("sfx_sdndth","sfx_last1","sfx_last2","sfx_last3","sfx_last4","sfx_last5")
--
--local function cSpd(ang, spd, m)
--	if m == nil then m = {scale=FRACUNIT} end
--	spd = FixedMul(spd, m.scale)
--	return FixedMul( cos(ang), spd ), FixedMul( sin(ang), spd )
--	//returns x and y of calc
--end
--
++
++local el_test = CV_RegisterVar({"elim_test", "Off", CV_NETVAR|CV_NOSHOWHELP, CV_OnOff})
++
++//el_enabled - toggles elim on and off in-game
++//el_time - the time between regular player eliminations once the game has started, seconds
++//el_stime - the time the race must progress for before the first elimination timer begins
++//el_announcements - client-side, if this is disabled playes won't see elimination announcements
++
++//el_timescaling - controls if the elim_time scales itself based on number of players
++//el_scalingminplayers - at or below min players, elim_time is el_scalingmaxtime
++//el_scalingmaxplayers - at or above max players, elim_time is el_scalingmintime
++//el_scalingmin/maxtime - if players are between min and max, the elim_time is adjusted linearly between min and max
++
++// test is for testing elimination procedures:
++// Prevents death by elimination, and forces the countdown to run under 1P mode.
+ 
+ -- local slotmod_prng_local_t = 0
+ -- local slotmod_prng_local_x = 6278
+@@ -164,8 +82,8 @@
+ 	//returns x and y of calc
+ end
+ 
 -local function countPlayersInGame() //this original guy here from callmore's hpmod
 -	local out = 0 //thank you based callmore
--	for p in players.iterate do
--		if not (p and p.valid and not p.spectator and not (p.pflags & PF_TIMEOVER)) then continue end
--		out = $+1
--	end
--	return out
--end
--
--local function cSpdEx(hang, vang, spd, m)
--	if hang == nil then error("hAng missing", 2) end
--	if vang == nil then error("vAng missing", 2) end
--	if spd == nil then error("spd missing", 2) end
--	if m == nil then m = {scale=FRACUNIT} end
--	spd = FixedMul(spd, m.scale)
--	local x = FixedMul( FixedMul( spd, cos(hang) ), cos(vang) )
--	local y = FixedMul( FixedMul( spd, sin(hang) ), cos(vang) )
--	local z = FixedMul( spd, sin(vang) )
--	return x,y,z
--	//returns x and y of calc
--end
--
--local starttime = 6*TICRATE + (3*TICRATE/4) // leveltime when race actually starts (~235)
--local introtime = 108+5 // leveltime when countdown, pre starttime, starts
--
--local elim = {}
--local function resetElim() -- Resets elim table to default values. Epic!
--	-- Should only be called within a mapload AND ONLY THEN.
--	elim = {
--		on = false, // Whether elimination is activated for this round
--		started = false, // Set to true when leveltime > starttime + stime
--		sp = false, // Whether this round begun with a single player (just for ease of access)
--		test = false, // Whether this round begun as a test round
--		runtime = 0, // Time since the elimination game started
--
--		eliminate = false, // Flag for second iterator to kill
--		eliminatenow = false, // If in overtime, force players to fucking die
--
--		startpcount = 0, // How many players were alive at the start of this round
--		livepcount = 0, // Players alive
--		prevlivepcount = 0, // Players alive the previous tic
--		el_timescaled = 15, //the time we will use if time scaling is on, instead of elim_time
--		lastman = false, //if the last man standing in a team battle has been announced
--
--		curtime = 0, // Elimination timer - Always counts down, eliminates someone when hitting 0
--
--		win = false, // Whether someone won
--		wintimer = 0, // Timer increases while win is true - This ends the map after a while
--
--		diedName = "", // Name of dead player/s
--		diedTimer = 0, // Starts at a value, counts down until zero - Handles "X eliminated" display
--		
--		friendly = false, //friendmod detected loaded or not
--		scoreannounce = false, //if intermission has thunk
--		maplaps = 3 //stored map laps to reset to during intermission cause you can't access map info from intermission >:v(
--	}
--	if CV_FindVar("fr_enabled") and FRIENDMOD_CheckTeams() then elim.friendly = true else elim.friendly = false end
--end
--//resetElim()
--
--local announcements = {
--	{"%n", "got eliminated"},
--	{"%n", "got obliterated"},
--	{"%n", "got deleted"},
--	{"%n", "got destroyed"},
--	{"%n", "got defeated"},
--	{"%n", "got killed"},
--	{"%n", "got massacred"},
--	{"%n", "got karted to death"},
--	{"%n", "got reduced to atoms"},
--	{"%n", "got evaporated"},
--	{"%n", "went poof"},
--	{"%n", "has exploded"},
--	{"%n", "is out"},
--	{"%n", "is ded"},
--	{"%n", "is dead"},
--	{"%n", "is kil"},
--	{"%n", "is kill"},
--	{"%n", "is done"},
--	{"%n", "went out"},
--	{"%n", "went to sleep"},
--	{"%n", "lost"},
--	{"press f for", "%n"},
--	{"rip", "%n"},
--	{"rip in peace", "%n"},
--	{"rest in peace", "%n"},
--	{"goodbye", "%n"},
--	{"bye", "%n"},
--	{"babai", "%n"},
--	{"cya", "%n"},
--	{"peace out", "%n"},
--	{"see you", "%n"},
--	{"sayonara", "%n"},
--	{"au revoir", "%n"},
--	{"adios", "%n"},
--	{"farewell", "%n"},
--	{"namaste", "%n"},
--	{"hasta la vista", "%n"},
--	{"it's over for", "%n"},
--	{"get out of here", "%n"},
--	{"gtfo", "%n"},
--	{"haha", "%n", "go boom"},
--	{"%n", "see you", "space cowboy"},
--	{"%n", "it's time to wait"},
--	{"try again next race", "%n"},
--	{"see you next race", "%n"},
--	{"%n", "so long partner"},
--	{"%n", "bit the dust"},
--	{"you're too slow", "%n"},
--	{"c'mon step it up", "%n"},
--	{"%n", "has been slain"},
--	{"it's no use", "%n"},
--	{"i pity you", "%n"},
--	{"%n", "got their butt kicked"},
--	{"go to your room", "%n"},
--	{"%n", "go take a break"},
--	{"break time for", "%n"},
--	{"%n", "wasn't fast enough"},
--	{"oh my god", "%n", "waaaaaaa"},
--	{"%n", "got the boot"},
--	{"%n", "got booted out", "of the race"},
--	{"Arivederchi", "%n"},
--	{"%n", "is going to heaven"},
--	{"%n", "is going to hell"},
--	{"%n", "got lost", "in the sauce"},
--	{"%n", "wasn't gamer enough"},
--	{"%n", "didn't make it"},
--	{"gg", "%n"},
--	{"ggs", "%n"},
--	{"ggwp", "%n"},
--	{"you'll get them", "next time", "%n"},
--	{"mission failed", "%n"},
--	{"game over", "%n"},
--	{"%n", "didn't get", "a promotion"},
--	{"%n", "got chatbugged"},
--	{"%n", "got pingspiked"},
--	{"%n", "got eradicated"},
--	{"%n", "flew too low"},
--	{"%n", "frikin died"},
--	{"%n", "didn't survive"},
--	{"%n", "you lose"},
--	{"%n", "got rekt"},
--	{"%n", "lived and learned"},
--	{"%n", "vanished"},
--	{"%n", "disappeared"},
--	{"%n", "got syncbombed"},
--	{"%n", "stopped working"},
--	{"curiosity", "killed the", "%n"},
--	{"%n", "vanished into", "the void of space"},
--	{"shoot", "%n", "failed"},
--	{"see you later", "%n"},
--	{"you can't catch me", "%n"},
--	{"you guys always leave", "%n", "behind"},
--	{"hey give", "%n", "some slack"},
--	{"%n", "lackluster", "performance i'd say"},
--	{"%n", "you are one", "pathetic creature"},
--	{"wait for", "%n", "maria"},
--	{"I don't think so", "%n"},
--	{"%n", "you are weak"},
--	{"%n", "loss unacceptable"},
--	{"%n", "that was pathetic"},
--	{"get out of my way", "%n"},
--	{"guess", "%n", "is out"},
--	{"c'mon", "%n", "you can do better"},
--	{"lucky for you", "%n", "let you win"},
--	{"%n", "got annihilated"},
--	{"%n", "violently exploded"},
--	{"%n", "alt f4'd"},
--	{"thanos snapped", "%n", "out of existence"},
--	{"the world was", "too tough for", "%n"},
--	{"%n", "won't be missed"},
--	{"%n", "will be missed"},
--	{"%n", "got game ended"},
--	{"%n", "self destructed"},
--	{"%n", "got fragged"},
--	{"%n", "got resynced"},
--	{"%n", "died from an", "unfortunate event"},
--	{"wave blew up", "%n"},
--	{"%n", "left this plane", "of existence"},
--	{"%n", "wrongdrifted"},
--	{"I rate", "%n", "7 out of 10"},
--	{"%n", "got cooked"},
--	{"%n", "is now spectating"},
--	{"omae wa mou", "shindeiru", "%n"},
--	{"time to afk", "%n"},
--	{"%n", "grab a snack", "and relax"},
--	{"%n", "went into orbit"},
--	{"%n", "you picked the wrong", "netgame fool"},
--	{"%n", "is gonna go play", "minecraft"},
--	{"%n", "ragequitted"},
--	{"%n", "is sleeping", "with the fishes"},
--	{"%n", "made an ouchie"},
--	{"%n", "will be remembered"},
--	{"that ain't", "%n"},
--	{"%n", "got wombo combo'd"},
--	{"%n", "insert more credits", "to continue"},
--	{"what was", "%n", "fighting for"},
--	{"%n", "divided by 0"},
--	{"%n", "had a whoopsie"},
--	{"%n", "failed at life"},
--	{"%n", "fell out of", "the world"},
--	{"%n", "had a bad time"},
--	{"%n", "got dunked on"},
--	{"%n", "went boom"},
--	{"%n", "ascended"},
--	{"%n", "got censored"},
--	{"%n", "felt the burn"},
--	{"%n", "was purged"},
--	{"%n", "was diagnosed", "with karted"},
--	{"%n", "fell rock bottom"},
--	{"guess", "%n", "will die"},
--	{"%n", "crashed"},
--	{"playtime", "is over for", "%n"},
--	{"have a", "rotten day", "%n"},
--	{"%n", "got assassinated"},
--	{"%n", "won't be remembered"},
--	{"%n", "got the bad ending"},
--	{"%n", "got isekai'd"},
--	{"Yippee Ki-Yay", "%n"},
--	{"See you never", "%n"},
--	{"Boom goes", "%n"},
--	{"KAPOW", "%n"},
--	{"GET OUT OF", "MY HOUSE", "%n"},
--	{"LUL", "%n"},
--	{"OMEGALUL", "%n"},
--	{"Sorry not sorry", "%n"},
--	{"Sorry", "%n"},
--	{"Here's a tissue", "%n"},
--	{"%n", "was sent", "back to school"},
--	{"%n", "passes his turn", "and goes to prison"},
--	{"%n", "got grounded"},
--	{"%n", "got claimed by death"},
--	{"%n", "got outplayed"},
--	{"%n", "is doomed"},
--	{"%n", "didn't git gud"},
--	{"%n", "got owned"},
--	{"%n", "got pwned"},
--	{"eyes on the road", "%n"},
--	//{"%n", "didn't play", "on difficulty"},
--	{"%n", "got murdered"},
--	{"%n", "asked for the", "v2 release date"},
--	{"it really do", "be like that", "%n"},
--	{"there goes", "%n"},
--	{"%n", "was sponsored by", "RAID SHADOW LEGENDS"},
--	{"%n", "can't lose here"},
--	{"nice driving", "%n"},
--	//{"hippity hoppity", "%n", "is gone-ity"},
--	{"%n", "got a call", "from their mom"},
--	{"%n", "lagged"},
--	{"Time to put", "%n", "to rest"},
--	{"cya later", "alligator", "%n"},
--	{"%n", "ate one too", "many banana"},
--	{"wtf", "%n"},
--	{"wth", "%n"},
--	{"%n", "is gonna", "meet god"},
--	{"%n", "is gonna", "meet satan"},
--	{"%n", "commited sudoku"},
--	{"%n", "didn't get", "the right item"},
--	{"fission mailed", "%n"},
--	{"%n", "was a worthless", "consumer model"},
--	{"%n", "please"},
--	{"%n", "pls"},
--	{"%n", "please wait"},
--	{"%n", "be patient"},
--	{"you did good", "%n"},
--	{"how was your game", "%n"},
--	{"we live in", "a society", "%n"},
--	{"try switching", "to metal sonic", "%n"},
--	{"hahahaha", "%n", "soccer"},
--	{"suspect", "%n", "apprehended"},
--	{"%n", "played at 512", "draw distance"},
--	{"%n", "played it like", "it was mario kart"},
--	{"%n", "is going back", "to mario kart"},
--	{"%n", "got denied"},
--	{"%n", "got BSOD'd"},
--	{"%n", "was typing", "during the race"},
--	{"%n", "had a bruh moment"},
--	{"%n", "didn't leave", "the danger zone"},
--	{"%n", "was lost in thoughts"},
--	{"no SPB was", "required for", "%n"},
--	{"later", "%n"},
--	{"%n", "was never real"},
--	{"%n", "who?"},
--	{"%n", "became nothing"},
--	{"%n", "was arrested", "for DUI"},
--	{"%n", "was just", "your imagination"},
--	{"%n", "woke up from", "a bad dream"},
--	{"%n", "didn't get", "the right item"},
--	{"%n", "shouldn't have", "picked that character"},
--	{"%n", "thought it", "was normal speed"},
--	{"%n", "broke the", "ping limit"},
--	{"%n", "opened their heart"},
--	{"begone", "%n"},
--	{"%n", "blames the ping"},
--	{"%n", "had controller issues"},
--	{"Too much SPEEN for", "%n"},
--	{"You know", "%n", "has the blues"},
--	{"%n", "has been erased", "from history"},
--	{"Your free trial", "of existing has ended", "%n"},
--	{"You gotta get", "better at this", "%n"},
--	{"Even without wings", "%n", "Can still fly"},
--	{"%n", "went to Brazil"},
--	{"Please fucking cry now", "%n"},
--	{"%n", "was just a regular", "hedgehog after all"},
--	{"Git gud", "%n"},
--	{"Become proficient", "%n"},
--	{"%n", "To die why..."},
--	{"Watch out", "%n", "You're gonna crash! AHHH!"},
--	{"%n", "is now off", "to the gulag"},
--	{"%n", "is dead", "not big suprise"},
--	{"Stay free", "%n"},
--	{"%n", "savoured it thoroughly"},
--	{"%n", "bites the dust"},
--	{"%n", "was banished to", "the shadow realm"},
--	{"The future refused", "to change for", "%n"},
--	{"%n", "took a tumble"},
--	{"%n", "threw the match...", "how pitiful"},
--	{"%n", "uninstalled"},
--	{"%n", "got in one fight", "and their mom got scared"},
--	{"So long, space", "%n"},
--	{"%n", "noclipped out", "of reality"},
--	{"%n", "is pining for", "the fjords"},
--	{"%n", "wasn't carried", "by AiAi"},
--	{"%n", "didn't lawnmower", "hard enough"}, 
--	{"%n", "wasn't able to", "conduct ME TRAIN"},
--	{"%n","scaled these","announcements"},//I am so fucking done trying to scale these motherfuckers holy shit
--	{"%n","didn't escape from","the city"},
--	{"music made","%n","loose control"},
--	{"maybe in another life","%n"},
--	{"%n","failed the vibe check"},
--	{"%n","SIGSEGV'D"},
--	{"%n","ate those words"},
--	{"bye have a","beautiful time","%n"},
--	{"%n","was VAC banned","from secure server"},
--	{"%n","was no contest"},
--	{"%n","license and","registration please"},
--	{"%n","was not the imposter"},
--	{"%n","was the imposter"},
--	{"%n","couldn't escape","crossing fate"},
--	{"%n","kneels"},
--	{"%n","repacked","bonuschars.kart"},
--	{"%n","was claimed","by the zone"},
--	{"%n","unlocked easy","difficulty"},
--	{"%n","entered absolute","territory"},
--	{"witness me","%n"},
--	{"%n","rides eternal,","shiny and chrome"},
--	//{"%n","gained","PF-TIMEOVER"}, //second thought this one isn't really funny
--	{"%n","left the game","<sync failure>"},
--	{"%n","deleted sys32"},
--	{"%n","blocked low"},
--	{"%n","blocked high"},
--	{"this is the","wrong room","%n"},
--	{"%n","your legs are","not okay"},
--	{"in water","%n","will drown"},
--	{"%n","is going home","in a box"},
--	{"texture","%n","has no width!"},
--	{"%n","committed existn't"},
--	{"%n","was jeckpoint'd"},
--	{"%n","modified useodds"},
--	//{"%n","out of memory","allocating 78169235 bytes"}, //too long and not funny
--	{"%n","attained escape","velocity"},
--	{"%n","had p.spectator","set to true"},
--	{"orbinaut plus","%n","creates corpse"},
--	{"end of the line","%n"},
--	{"%n","choked"},
--	{"%n","rolled an SPB"},
--	{"%n","got a single","shoe in 12th"},
--	{"%n","has no mouth","and must scream"},
--	{"god issued a","total recall on","%n"},
--	{"%n","can't drive 55"},
--	{"%n","downloaded a car"},
--	{"SORRY","     ","NOTHING"}, //heh
--	{"%n","didn't get","on the ball"},
--	{"mighty putty fixes","everything but","%n"},
--	{"flex tape","couldn't seal","%n"},
--	{"%n","was forsaken"},
--	{"%n","is gonna carry","that weight..."},
--	{"%n","committed persona 3"},
--	{"%n","never saw it coming"},
--	{"i can't believe","%n","is dead"},
--	{"error code 404","%n","not found"},
--	{"%n","is out of touch"},
--	{"%n","was marked","for death"},
--	{"wake me up","%n"},
--	{"%n","can't wake up"},
++local function countPlayersInGame() //sorry callmore I stole this to use it here -freeman
++	local out = 0
+ 	for p in players.iterate do
+ 		if not (p and p.valid and not p.spectator and not (p.pflags & PF_TIMEOVER)) then continue end
+ 		out = $+1
+@@ -541,6 +459,7 @@
+ 	{"flex tape","couldn't seal","%n"},
+ 	{"%n","was forsaken"},
+ 	{"%n","is gonna carry","that weight..."},
++	{"%n","pinged retrostation"}, //can't wait to get an angry message about this one //UPDATE: angry message recieved
+ 	{"%n","committed persona 3"},
+ 	{"%n","never saw it coming"},
+ 	{"i can't believe","%n","is dead"},
+@@ -549,20 +468,7 @@
+ 	{"%n","was marked","for death"},
+ 	{"wake me up","%n"},
+ 	{"%n","can't wake up"},
 -	{"%n","had rapid mid-drive","disassembly"},
 -	{"%n","was hit by the","kitchen sink"},
 -	{"Soap trusted you,","%n"},
@@ -1838,105 +201,126 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 -	{"%n","failed to boostquench"},
 -	{"mmm, no, very unwise","%n"},
 -	{"women want","%n","fish fear them"}
--}
--
--local chosenAnnouncement = 1
--local function printAnnouncement(tsx, tsy)
--	local toPrint = announcements[chosenAnnouncement]
--	//local lasttsy = 0
--	//local laststr = ""
--	//print("tsx/FRAC:"+tsx/FRACUNIT+" tsy/FRAC:"+tsy/FRACUNIT)
--	for i = 1,table.getn(toPrint)
--		//if(laststr ~= toPrint[i]) then print("==WRITE ME UP INSIDE: "+toPrint[i]) end
--		//laststr = toPrint[i] //OH MY FUCK DEBUG MESSAGES ARE COMING OUT OF MY EYES
--		local realtsy = tsy + (i*14) - 40
--		//local realtsy = tsy + (i*FRACUNIT*8)-40*FRACUNIT //WHY WONT YOU JUST SCALE 
--		//if lasttsy ~= realtsy then print("realtsy/FRAC:"+realtsy/FRACUNIT) end
--		local s = toPrint[i] //haah fuck this doesn't work
--		if s == "%n" then s = elim.diedName end
--		drawStringMkII(tsx, realtsy, string.upper(s), FONT_KART2, V_SNAPTOTOP|V_40TRANS, {align="center",color=SKINCOLOR_BROWN})
--	end
++	{"%n","had rapid mid-drive","disassembly"}
+ }
+ 
+ local chosenAnnouncement = 1
+@@ -581,7 +487,88 @@
+ 		if s == "%n" then s = elim.diedName end
+ 		drawStringMkII(tsx, realtsy, string.upper(s), FONT_KART2, V_SNAPTOTOP|V_40TRANS, {align="center",color=SKINCOLOR_BROWN})
+ 	end
 -end
--
--
--COM_AddCommand("forcewin", function()
--	elim.started = true
--	elim.win = true
--end, 1)
--
--COM_AddCommand("elim_srreset",function(p)
--	if not el_scorereport.value then
--		CONS_Printf(p, "\133Score report is not on. \128But the round number for scores was reset to 1 anyways.")
++end
++
++
++
++
++
++-- [ strashEdit ] --
++-- just factoring this part
++local function _respawnEliminatedPlayer(p)
++	if p.elim_rejoinEnd and p.spectator then
++		p.spectator = false
++		if p.pflags&PF_WANTSTOJOIN then
++			p.pflags = p.pflags^^PF_WANTSTOJOIN
++		end
++	end
++end
++
++local function _respawnEliminatedPlayers()
++	for p in players.iterate do
++		_respawnEliminatedPlayer(p)
++	end
++end
++
++-- for the mods that end the round themselves because they need to display something
++-- at the end of the race or whatever
++local function _endElimRound()
++	COM_BufInsertText(server, "allowteamchange 1")
++	//chatprint("\x83<SERVER> End of round! Team change is now allowed.")
++	local place = 0 //place they finished (but actually the minutes displayed in realtime
++	local minutes = 0 //minutes they survived (but actually the seconds displayed in realtime
++	local seconds = 0 //seconds survived (but actually the centiseconds displayed in realtime
++	
++	-- [strashEdit] --
++	-- yeah, in friend races, let's just not do the other stuff
++	-- (team win when the last survivor belong to you team is fine)
++	-- --
++	if elim.friendly and FRIENDMOD_TeamBattle() then
++		for p in players.iterate do
++			_respawnEliminatedPlayer(p)
++		end
++		return 
++	end
++	
++	for p in players.iterate do //oh my god this is a hack				
++		if p.eliminatedtime and p.eliminatedpos then //basically we are calculating time survived
++			place = TICRATE*60*p.eliminatedpos //but because of results screen im going to force these numbers to play nice
++			minutes = p.eliminatedtime/(60*TICRATE)
++			seconds = (p.eliminatedtime-(minutes*60*TICRATE))/TICRATE
++			//seconds = (p.eliminatedtime-(p.eliminatedtime/(60*TICRATE)))/100
++			//print("DEBUG: place: " + place + " / minutes: " + minutes + " / seconds: " + seconds)
++		else //they weren't eliminated or something went wrong
++			place = TICRATE*60 //more than likely they are the winner
++			minutes = p.realtime/(60*TICRATE)
++			seconds = (p.realtime-(minutes*60*TICRATE))/TICRATE					
++		end
++		p.realtime = place+(minutes*TICRATE)+(seconds*TICRATE/100)
++		if not p.spectator then
++			chatprint("\x83<SERVER> "..p.name.." survived!")
++		end
++		//if p.eliminatedtime then p.realtime = p.eliminatedtime end
++		//if p.eliminatedpos then p.kartstuff[k_position] = p.eliminatedpos end
++	end
++	G_ExitLevel()
++	for p in players.iterate do if p.valid
++		S_StopMusic(p)
++		if p.exiting or (p.eliminatedpos and p.eliminatedpos <= 3) then
++			S_ChangeMusic("KROK", true, p)
++			//print(p.name.." playing KROK (placed "..p.eliminatedpos..")")
++		elseif p.eliminatedpos <= elim.startpcount/2 //tophalf
++			S_ChangeMusic("RACENT", true, p)
++			//print(p.name.." playing RACENT (placed "..p.eliminatedpos..")")
++		else
++			S_ChangeMusic("KRLOSE", true, p)
++			//print(p.name.." playing KRLOSE (placed "..p.eliminatedpos..")")
++		end
++		-- [ strashEdit ]
++		-- this part has been factored
++		_respawnEliminatedPlayer(p)
++		--
++	end end
++end
++-- --
+ 
+ 
+ COM_AddCommand("forcewin", function()
+@@ -636,13 +623,19 @@
+ 			COM_BufInsertText(server, "basenumlaps \034Map Default\034")
+ 		end
+ 		COM_BufInsertText(server, "allowteamchange 1")
 -	end
--	print("Score report round number was reset to 1.")
--	server.roundnumber = 1
--end, 1)
--
--COM_AddCommand("elim_srround",function(p, numrounds)
--	if not numrounds then
--		CONS_Printf(p, "Current round: "..server.roundnumber)
--		CONS_Printf(p, "\133Usage: \128'el_scorereportround <round number>' (will set the current round to the provided number)")
--		return
--	end
--	local nr = tonumber(numrounds)
--	if not nr or nr <= 0 then
--		CONS_Printf(p, "\133***WHAT ARE YOU TRYING TO DO***") //I liked this format a lot that tyron used, bless him
--		return
--	end
--	if not el_scorereport.value then
--		CONS_Printf(p, "\133Score report is not on. \128But the round number for scores was set to "..numrounds.." anyways.")
--	end
--	print("Round number was set to "..numrounds.." manually.")
--	server.roundnumber = nr
--end, 1)
--
--addHook("NetVars", function(x)
--	elim = x($)
--end)
--
--addHook("IntermissionThinker", function()
--	if elim.scoreannounce == true then return end
--	elim.scoreannounce = true
--	if elim.on then //also jamming this in here lmao
--		if el_spbdefault.value == "On" and CV_FindVar("selfpropelledbomb").value == 0 then
--			COM_BufInsertText(server, "selfpropelledbomb 1")
--		elseif el_spbdefault.value == "Off" and CV_FindVar("selfpropelledbomb").value == 1 then
--			COM_BufInsertText(server, "selfpropelledbomb 0")
--		end
--		//okay update this fucking broke replays and I am pissed
--		//this will only flop if elimination was disabled prior to the thinker running
--		//at this point I dont even care anymore fuck
--		if el_enabled.value == 0 then
--			COM_BufInsertText(server, "numlaps "..elim.maplaps)
--			COM_BufInsertText(server, "basenumlaps \034Map Default\034")
--		end
--		COM_BufInsertText(server, "allowteamchange 1")
--	end
--	if not el_scorereport.value then return end
--	local roundnum = "???"
--	if server.roundnumber then roundnum = server.roundnumber end
--	print("===== SCORE REPORT: ROUND #"..roundnum.." =====")
--	print("\133"..string.upper(mapheaderinfo[gamemap].lvlttl).." "..string.upper(mapheaderinfo[gamemap].zonttl))
++	end
++	
++	-- [ strashEdit ] --
++	-- incase of external 'exitlevel' call
++	_respawnEliminatedPlayers()
++	--
++	
+ 	if not el_scorereport.value then return end
+ 	local roundnum = "???"
+ 	if server.roundnumber then roundnum = server.roundnumber end
+ 	print("===== SCORE REPORT: ROUND #"..roundnum.." =====")
+ 	print("\133"..string.upper(mapheaderinfo[gamemap].lvlttl).." "..string.upper(mapheaderinfo[gamemap].zonttl))
 -	print("\131##\128| \131NAME                  \128| \131PTS \128|\133DMG \128|\135CMB \128|\131KIL")
--	local sortedplayers = {}
--	//print("storing players")
--	for p in players.iterate do
--		if p and p.valid then
--			//print(p.name.." "..p.marescore)
--			if p.score ~= nil then table.insert(sortedplayers, p) end
--		end
--	end
--	//print("table sorting")
--	table.sort(sortedplayers,function(a, b)
--		return a.score > b.score
--	end)
--	local i = 0
--	//print("printing list")
--	for _, q in ipairs(sortedplayers)
--		i=$+1
--		local pos = string.format("%02i",i)
--		local pname = string.format("%-21s",q.name)
--		local pscore = string.format("%4s",q.score)
++	print("\131##\128| \131NAME                  \128| \131PTS")
+ 	local sortedplayers = {}
+ 	//print("storing players")
+ 	for p in players.iterate do
+@@ -662,19 +655,7 @@
+ 		local pos = string.format("%02i",i)
+ 		local pname = string.format("%-21s",q.name)
+ 		local pscore = string.format("%4s",q.score)
 -		local pdmg = string.format("%3s",0) //these might not exist so you get this nonsense
 -		local pcmb = string.format("%3s",0)
 -		local pkil = string.format("%3s",0)
@@ -1950,288 +334,123 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 -			pkil = string.format("%3s",q.hpmod.killpoints)
 -		end
 -		print("\130"..pos.."\128| "..pname.." |\132"..pscore.. " |\133"..pdmg.." |\135"..pcmb.." |\131"..pkil)
--	end
--	server.roundnumber = $+1
--end)
--
--addHook("MobjThinker", function(m) //dirty
--	if m.lived == nil then m.lived = 0 end
--	m.lived = $+1
--
--	if m and m.valid and m.lived > 1 then
--		if m.tied and m.tied.valid and m.tied.player and m.tied.player.valid and not m.tied.player.spectator and m.tied.player.needOrbit then
--			local p = m.tied.player
--			local pm = m.tied
--
--			local thisAng = leveltime*(ANG2*3)
++		print("\130"..pos.."\128| "..pname.." |\132"..pscore)
+ 	end
+ 	server.roundnumber = $+1
+ end)
+@@ -689,7 +670,7 @@
+ 			local pm = m.tied
+ 
+ 			local thisAng = leveltime*(ANG2*3)
 -			local x,y = cSpd(thisAng+m.angmod, max(elim.curtime/2,(el_safetynet.value-p.elimlastplacetime)/2)*FRACUNIT, pm)
--			P_TeleportMove(m, pm.x+x, pm.y+y, pm.z)
--		else
--			P_RemoveMobj(m)
--			return
--		end
--	end
--end, MT_ELIMWARNING)
--
--addHook("MapLoad", function(mapnum)
--	resetElim()
--	if not server.roundnumber then server.roundnumber = 1 end
--	elim.maplaps = mapheaderinfo[mapnum].numlaps //to be used during intermission, thank you based jugador -freeman
--	local playercount = 0
--	for p in players.iterate do if p and p.valid then
--		if not p.spectator then playercount = $+1 end
--	end end
++			local x,y = cSpd(thisAng+m.angmod, (elim.curtime/2)*FRACUNIT, pm)
+ 			P_TeleportMove(m, pm.x+x, pm.y+y, pm.z)
+ 		else
+ 			P_RemoveMobj(m)
+@@ -706,7 +687,16 @@
+ 	for p in players.iterate do if p and p.valid then
+ 		if not p.spectator then playercount = $+1 end
+ 	end end
 -	if el_enabled.value == 1 then elim.on = true end
--	if el_minplayers.value != 0 then
--		if playercount < el_minplayers.value then
--			elim.on = false
--			print("Elimination disabled: below minimum player count ("..el_minplayers.value..")")
--			//local maplaps = mapheaderinfo[mapnum].numlaps //thank you based jugador -freeman
--			COM_BufInsertText(server, "numlaps "..elim.maplaps)
--			COM_BufInsertText(server, "basenumlaps \034Map Default\034")
--			COM_BufInsertText(server, "allowteamchange 1")
--		end
--	end
--	if elim.on and el_spbgone.value > 0 then
--		if playercount < el_spbgone.value then
--			COM_BufInsertText(server, "selfpropelledbomb 0")
--			print("\133SPB Disabled: below player count \131("..playercount.."/"..el_spbgone.value..")")
--			if el_lightninggone.value then
--				COM_BufInsertText(server, "thundershield 0")
--			end
--		else
--			COM_BufInsertText(server, "selfpropelledbomb 1")
--			if el_lightninggone.value then
--				COM_BufInsertText(server, "thundershield 1")
--			end
--			//print("SPB was enabled.")
--		end
--	end
--	if el_test.value == 1 then elim.test = true end
--
--	for p in players.iterate do
--		p.elim_rejoinEnd = false --if even
--		p.eliminatedtime = 0
--		p.eliminatedpos = 0
--		p.elimlastmanannounce = 0 //timer for LAST MAN STANDING message
++	if el_enabled.value then elim.on = true end	
++	-- [ strashEdit ] --
++	-- yeah, I'm gonna go with "just play the map normally" if on
++	-- a non-looping track"
++	if elim.on and (mapheaderinfo[mapnum].levelflags & LF_SECTIONRACE) then
++		print("Sorry, non-looping maps can't be played in elim mode")
++		chatprint("\129Elimination\130 can't be played on \136section maps\130, sorry...")
++		elim.on= false
++	end
++	-- --
+ 	if el_minplayers.value != 0 then
+ 		if playercount < el_minplayers.value then
+ 			elim.on = false
+@@ -739,10 +729,10 @@
+ 		p.eliminatedtime = 0
+ 		p.eliminatedpos = 0
+ 		p.elimlastmanannounce = 0 //timer for LAST MAN STANDING message
 -		//p.elimlastmanodds = 0 //how many players you're up against when solo, used to determine how clutch you are LMAO DIDNT FINISH YET ASKDGHASKGFH
 -		p.elimlastplacetime = 0
--	end
++		p.elimlastmanodds = 0 //how many players you're up against when solo, used to determine how clutch you are LMAO DIDNT FINISH YET ASKDGHASKGFH
+ 	end
 -end)
--
--addHook("ThinkFrame", function() if elim.on and leveltime > 2 then // START THINKFRAME ---------------------------------------
--//print("===lmao el_timescaled*ticrate is "+elim.el_timescaled*TICRATE)
--// Check some stuff prior to starting\
--if leveltime == 10 then
--	if (mapheaderinfo[gamemap].levelflags & LF_SECTIONRACE) then
--		G_ExitLevel()
--		print("Non-looping tracks are not supported! Ending map immediately.")
--	else
--		COM_BufInsertText(server, "numlaps 50") // So elim runs uninterrupted
--		COM_BufInsertText(server, "basenumlaps 50") // Set this here so replays work jesus christ
--		COM_BufInsertText(server, "allowteamchange 1")
--		//chatprint("\x83<SERVER> Team change allowed. Join in!")
--	end
--	//im so fucking sorry this is probably terrible -freeman
--	for p in players.iterate do
--		//print("Checking "..p.name.." for PF_WANTSTOJOIN.")
--		if p.pflags&PF_WANTSTOJOIN then
--			//print("Turned off PF_WANTSTOJOIN for "..p.name..".")
--			p.pflags = p.pflags^^PF_WANTSTOJOIN
--		end
--	end
--	//the reason I am doing this is to stop a bug from manifesting where people eliminated pre-game
--	//are dumped back in the game immediately due to this flag, causing desyncs
--end
--
--// Count live players! Also carry player pre-count actions
--
--local pcount = 0 // Total players
--local lastpos = 0 // Last position recorded
--local lastposp = 0 // How many players are in this position (would be COOL if there was ONLY ONE)
--elim.livepcount = 0 // Count of live players
--
--local team1players = 0 //if friendmod, how many players on each team
--local team2players = 0
--
--local randnumber = P_RandomRange(1,5) //last man sound clip
--
--local DEBUG_TEST = elim.test
--
--for p in players.iterate do if p and p.valid then
--	pcount = $+1
--	if p.mo and p.mo.valid and not p.spectator then
--		elim.livepcount = $+1
++end)
++
+ 
+ addHook("ThinkFrame", function() if elim.on and leveltime > 2 then // START THINKFRAME ---------------------------------------
+ //print("===lmao el_timescaled*ticrate is "+elim.el_timescaled*TICRATE)
+@@ -769,6 +759,19 @@
+ 	//are dumped back in the game immediately due to this flag, causing desyncs
+ end
+ 
++//im sorry im sorry this horrific hack is here to turn booststack nerfing from slipstream off
++//this was required because permission to edit slipstream and acro is not feasible to get
++//and the slipstream var always evaluates true from the acro check for it
++//please never ever host this
++//print("THINKINGFRAME.PNG")
++if acrobatics != nil then
++	//print("ACROCHECK IS YES")
++	if booststacknerf == true then
++		booststacknerf = false
++		//print("BOOSTSTACKNERF MAKE YOU LOOSE CONTROL")
++	end
++end
++
+ // Count live players! Also carry player pre-count actions
+ 
+ local pcount = 0 // Total players
+@@ -784,14 +787,15 @@
+ local DEBUG_TEST = elim.test
+ 
+ for p in players.iterate do if p and p.valid then
++	local pk = p.kartstuff
+ 	pcount = $+1
+ 	if p.mo and p.mo.valid and not p.spectator then
+ 		elim.livepcount = $+1
 -		if p.kartstuff[k_position] > lastpos then
 -			lastpos = p.kartstuff[k_position]
--			lastposp = 0
--		end
++		if pk[k_position] > lastpos then
++			lastpos = pk[k_position]
+ 			lastposp = 0
+ 		end
 -		if p.kartstuff[k_position] == lastpos then
--			lastposp = $+1
--		end
--		if elim.friendly and FRIENDMOD_TeamBattle() then
--			if p.FRteam == 1 then
--				team1players = $+1
--			end
--			if p.FRteam == 2 then
--				team2players = $+1
--			end
--		end
++		if pk[k_position] == lastpos then
+ 			lastposp = $+1
+ 		end
+ 		if elim.friendly and FRIENDMOD_TeamBattle() then
+@@ -802,7 +806,6 @@
+ 				team2players = $+1
+ 			end
+ 		end
 -		p.kartstuff[k_lapanimation] = 0 //lap indicators apparently cant be turned off normally and are annoying in elim
--	end
--end end
--
--// Carry thinkframe actions, at last
--// These include starting the game lol
--
--local elimstarttime = starttime + (el_stime.value*TICRATE)
--
--if leveltime == elimstarttime then // IT BEGINS
--	elim.startpcount = 0
--	for p in players.iterate do
--		if p.mo and p.mo.valid and not p.spectator then
--			elim.startpcount = $+1
--			p.pingtime = -4 // (let's not forget)
--		end
--	end
--	if elim.startpcount <= 1 then elim.sp = true end
--	if DEBUG_TEST then elim.sp = false;elim.startpcount = 2 end // faked
--
--	if not elim.sp then // If there is more than 1 nerd,
--		S_StartSound(nil, sfx_sdndth) // Play this sound too
--		COM_BufInsertText(server, "allowteamchange 0")
--		print("Team change privilege revoked.")
--	end
--	if el_timescaling.value == 1 and not elim.sp then
--		if elim.startpcount <= el_scalingminplayers.value then
--			elim.el_timescaled = el_scalingmaxtime.value 
--		elseif elim.startpcount >= el_scalingmaxplayers.value then
--			elim.el_timescaled = el_scalingmintime.value
--		else //if it wasn't easy, fuck we have to do this nonsense below
--			local playerdiff = el_scalingmaxplayers.value-el_scalingminplayers.value
--			local timediff = el_scalingmaxtime.value-el_scalingmintime.value
--			local timeperplayer = (timediff*TICRATE)/playerdiff //I am doing this so stuff counts for fractions of a second before its rounded lol int math
--			elim.el_timescaled = max(el_scalingmaxtime.value-((timeperplayer*(elim.startpcount-el_scalingminplayers.value))/TICRATE),el_scalingmintime.value)
--		end //essentially, adding a fraction of the time for each player above minimum
--		elim.curtime = elim.el_timescaled*TICRATE
--		print("Starting Players: "+elim.startpcount)
--		print("Elimination time is "+elim.el_timescaled+" seconds per player this round.")
--	else
--		elim.curtime = el_time.value*TICRATE
--	end
--end
--
--local spbvalue = CV_FindVar("selfpropelledbomb").value
--if el_spbgone.value > 1 and spbvalue == 1  and leveltime%3 == 0 then //the leveltime is so the console command has atic or two
--	if elim.livepcount <= el_spbgone.value then //to go through, otherwise this runs valid twice
--		COM_BufInsertText(server, "selfpropelledbomb 0")
--		print("\133ELIMINATION: SPB disabled for the last "..el_spbgone.value.." players!")
--		if el_lightninggone.value then
--			COM_BufInsertText(server, "thundershield 0")
--		end
--	end
--end
--
--if leveltime > elimstarttime then // IT HAS BEGUN
--	elim.started = true
--	elim.runtime = $+1
--
--	if not elim.sp and not DEBUG_TEST then
--		if elim.livepcount <= 1 then
--			elim.win = true
--		end
--		if elim.friendly and FRIENDMOD_TeamBattle() then
--			if team1players <= 0 or team2players <= 0 then
--				elim.win = true
--			end
--		end
--	end
--
--	if not elim.win then
--		elim.curtime = $-1 // Take some of that TIMER JUICE
--
--		if elim.livepcount < elim.prevlivepcount then
--			// Live people dissapeared during the round, counter it by adding time to the timer
--			// this accounts for spectators or HP mod or whatever
--			// it also caps to the time between eliminations so it won't overflow the timer now
--			if el_timescaling.value == 1 then
+ 	end
+ end end
+ 
+@@ -880,9 +883,9 @@
+ 			// this accounts for spectators or HP mod or whatever
+ 			// it also caps to the time between eliminations so it won't overflow the timer now
+ 			if el_timescaling.value == 1 then
 -				elim.curtime = min(3*(elim.el_timescaled*TICRATE)/2,$+(elim.el_timescaled*TICRATE*3)/4)
--			else
++				elim.curtime = min(elim.el_timescaled*TICRATE,$+(elim.el_timescaled*TICRATE*3)/4)
+ 			else
 -				elim.curtime = min(3*(el_time.value*TICRATE)/2,$+(el_time.value*TICRATE*3)/4)//adding only 75% of the timer to speed things up
--			end
--		end
--		//this block determines if the last teammate of a team died and that player is now solo and outnumbered
--		if elim.friendly and FRIENDMOD_TeamBattle() then
--			if not elim.lastman then
--				local unluckyguy = nil
--				//print("team1players: "..team1players.." / team2players: "..team2players)
--				if team1players > 1 and team2players == 1 then
--					for p in players.iterate do if p and p.valid then
--						if (not p.spectator) and p.FRteam == 2 then
--							unluckyguy = p
--							p.elimlastmanodds = team1players
--							//print("unlucky lad: "..p.name)
--						end
--					end end
--				end
--				if team2players > 1 and team1players == 1 then
--					for p in players.iterate do if p and p.valid then
--						if (not p.spectator) and p.FRteam == 1 then
--							unluckyguy = p
--							p.elimlastmanodds = team2players
--							//print("unlucky lad: "..p.name)
--						end
--					end end
--				end
--				//im so sorry
--				if unluckyguy then
--					elim.lastman = true
--					unluckyguy.elimlastmanannounce = 6*TICRATE
--					if randnumber == 1 then
--						S_StartSound(nil, sfx_last1, unluckyguy)
--					elseif randnumber == 2 then
--						S_StartSound(nil, sfx_last2, unluckyguy)
--					elseif randnumber == 3 then
--						S_StartSound(nil, sfx_last3, unluckyguy)
--					elseif randnumber == 4 then
--						S_StartSound(nil, sfx_last4, unluckyguy)
--					elseif randnumber == 5 then
--						S_StartSound(nil, sfx_last5, unluckyguy)
--					end
--				end
--			end
--		end
--		if elim.curtime < 0 then // Eliminate?
--			chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
--			elim.eliminate = true
--			// We don't set the elimination time here - We do that later, AFTER we eliminate people
++				elim.curtime = min(el_time.value*TICRATE,$+(el_time.value*TICRATE*3)/4)//adding only 75% of the timer to speed things up
+ 			end
+ 		end
+ 		//this block determines if the last teammate of a team died and that player is now solo and outnumbered
+@@ -930,7 +933,7 @@
+ 			chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
+ 			elim.eliminate = true
+ 			// We don't set the elimination time here - We do that later, AFTER we eliminate people
 -			if elim.curtime < el_overtime.value*TICRATE*-1 then //-10*TICRATE overtime has no biz being 10 seconds long, 2 is more than enough
--				// Wow, we're past schedule! Die now!
--				chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
--				elim.eliminatenow = true
--			end
--		else
--			// Do not eliminate people if this isn't even 0 what the fuck
--			elim.eliminate = false
--			elim.eliminatenow = false
--		end
--	else
--		//if elim.wintimer % 35 == 0 then
--			//print("ELIM WIN: "..elim.wintimer/35)
--		//end
--		elim.wintimer = $+1
--
--		if elim.wintimer == 1
--			for p in players.iterate do
--				if not p.spectator then
--					S_ChangeMusic("KBWIN", false, p)
--				else
--					S_ChangeMusic("KBOK", false, p)
--				end
--			end
--		end
--		// elim_win is true and X seconds passed (for the music to play) after a win?
--		// End the level already, also play cute sounds
++			if elim.curtime < -2*TICRATE then //-10*TICRATE overtime has no biz being 10 seconds long, 2 is more than enough
+ 				// Wow, we're past schedule! Die now!
+ 				chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
+ 				elim.eliminatenow = true
+@@ -957,51 +960,11 @@
+ 		end
+ 		// elim_win is true and X seconds passed (for the music to play) after a win?
+ 		// End the level already, also play cute sounds
 -		if elim.wintimer > 10*TICRATE then
 -			COM_BufInsertText(server, "allowteamchange 1")
 -			//chatprint("\x83<SERVER> End of round! Team change is now allowed.")
@@ -2277,229 +496,85 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 -					end
 -				end
 -			end end
--		end
--	end
--end
--
--if elim.diedTimer > 0 then elim.diedTimer = $-1 end
--
--local deathcount = 0 // Counts players killed in a single elimination event
--
--for p in players.iterate do if p and p.valid then
--	if p.elim_rejoinEnd == nil then p.elim_rejoinEnd = false end // whether this player gets set to rejoin
--	if p.pingtime == nil then p.pingtime = 10*TICRATE end
--
--	if p.needOrbit == nil then p.needOrbit = false end
--	// p.objOrbit
--	// needOrbit bool controls whether the player requires an orbiting set of objects around it
--	// objOrbit just stores the first orbit object to check whether the player has one already
--	if p.eliminatedpos == nil then p.eliminatedpos = 0 end
--	if p.eliminatedtime == nil then p.eliminatedtime = 0 end
--
--	if p.elimlastmanannounce == nil then p.elimlastmanannounce = 0 end
--	if p.elimlastmanannounce > 0 then p.elimlastmanannounce = $-1 end
--	
++		if elim.wintimer > 10*TICRATE then
++			-- [ strashEdit ] --
++			-- factorized this part for compatibility
++			_endElimRound()
++			-- --
+ 		end
+ 	end
+ end
+@@ -1024,29 +987,28 @@
+ 	if p.elimlastmanannounce == nil then p.elimlastmanannounce = 0 end
+ 	if p.elimlastmanannounce > 0 then p.elimlastmanannounce = $-1 end
+ 	
 -	if p.elimlastplacetime == nil then p.elimlastplacetime = 0 end
 -	
--	p.needOrbit = false
--
--	--p.realtime = elim.curtime or 0
++	local pk = p.kartstuff
+ 	p.needOrbit = false
+ 
+ 	--p.realtime = elim.curtime or 0
 -	//p.realtime = p.kartstuff[k_position] + 69
--
--	local annoytime = min(max(2, elim.curtime/8), 2*TICRATE) // Don't want to deafen people
--	p.pingtime = $ + 1
--
--	if p.mo and p.mo.valid then
--		if not p.spectator and not elim.sp then
++	//p.realtime = pk[k_position] + 69
+ 
+ 	local annoytime = min(max(2, elim.curtime/8), 2*TICRATE) // Don't want to deafen people
+ 	p.pingtime = $ + 1
+ 
+ 	if p.mo and p.mo.valid then
+ 		if not p.spectator and not elim.sp then
 -			local inLast = p.kartstuff[k_position] == lastpos // self explanatory
--
--			if inLast then
--				// If this player is in last place and we have to eliminate them
--				// Or if the elimination time is past schedule...
++			local inLast = pk[k_position] == lastpos // self explanatory
+ 
+ 			if inLast then
+ 				// If this player is in last place and we have to eliminate them
+ 				// Or if the elimination time is past schedule...
 -				if (elim.eliminate and lastposp == 1 and p.elimlastplacetime >= el_safetynet.value) or elim.eliminatenow then
--					p.elim_rejoinEnd = true
--					deathcount = $+1
--					p.eliminatedtime = p.realtime
--					p.eliminatedpos = countPlayersInGame()
++				if (elim.eliminate and lastposp == 1) or elim.eliminatenow then
+ 					p.elim_rejoinEnd = true
+ 					deathcount = $+1
+ 					p.eliminatedtime = p.realtime
+ 					p.eliminatedpos = countPlayersInGame()
 -					p.kartstuff[k_position] = p.eliminatedpos //hopefully fixes SPB targeting spectators
--					local timestring = string.format("%i'%02i\34%02i",G_TicsToMinutes(p.realtime,true),G_TicsToSeconds(p.realtime),G_TicsToCentiseconds(p.realtime))
--					chatprint("\x87<SERVER> "+p.name+" was eliminated at "+timestring+" in position "+countPlayersInGame())
--					//print("===I GOT NO FUKIN CLUE HOW LUA WORKS: ",timestring)
--					elim.diedName = p.name
--					elim.diedTimer = 5*TICRATE
--					P_SpawnMobj(p.mo.x, p.mo.y, p.mo.z, MT_SPBEXPLOSION) // boom
--					S_StartSound(nil, sfx_noooo2, p) // NOOOOOOOOOOOOOOOO
--					elim.livepcount = $-1 // well,
--				end
--			end
--
++					pk[k_position] = p.eliminatedpos //hopefully fixes SPB targeting spectators
+ 					local timestring = string.format("%i'%02i\34%02i",G_TicsToMinutes(p.realtime,true),G_TicsToSeconds(p.realtime),G_TicsToCentiseconds(p.realtime))
+ 					chatprint("\x87<SERVER> "+p.name+" was eliminated at "+timestring+" in position "+countPlayersInGame())
+ 					//print("===I GOT NO FUKIN CLUE HOW LUA WORKS: ",timestring)
+@@ -1058,9 +1020,8 @@
+ 				end
+ 			end
+ 
 -			if leveltime > elimstarttime and inLast and not elim.win then
 -				if p.elimlastplacetime < el_safetynet.value then p.elimlastplacetime = $+1 end
 -				//print(p.name.."YOU BEEN IN LAST FOR "..p.elimlastplacetime.." TICS DUMMY")
--				if p.pingtime > annoytime then
--					--print("beep")
--					//S_StartSound(nil, sfx_kc39, p)
--					S_StartSound(p.mo, sfx_kc3d)
--					p.pingtime = 0
--				end
--				p.needOrbit = true
--			else
--				p.pingtime = 128*FRACUNIT
++			if leveltime > elimstarttime
++			and inLast and not elim.win then
+ 				if p.pingtime > annoytime then
+ 					--print("beep")
+ 					//S_StartSound(nil, sfx_kc39, p)
+@@ -1070,10 +1031,6 @@
+ 				p.needOrbit = true
+ 			else
+ 				p.pingtime = 128*FRACUNIT
 -				if p.elimlastplacetime > 0 then
 -					p.elimlastplacetime = $-1
 -					//print(p.name.."YOU BEEN IN LAST FOR "..p.elimlastplacetime.." TICS DUMMY")
 -				end
--			end
--		end
--
--		if p.needOrbit and p.mo and p.mo.valid then
--			if not p.objOrbit or not p.objOrbit.valid then
--				for i = 1,8 do
--					local e = P_SpawnMobj(0,0,0,MT_ELIMWARNING)
--					e.tied = p.mo
--					e.angmod = ANGLE_45*i
--					if i == 1 then p.objOrbit = e end
--				end
--			end
--		end
--
--		if elim.win then
--			if p.exiting == 0 then
--				// Generally the losers are already spectating, so
--				p.exiting = 1
--				P_PlayVictorySound(p.mo)//I am here to duplicate vanilla behavior, not ask questions
--				local exitsign = P_SpawnMobj(p.mo.x, p.mo.y, p.mo.z+(mapobjectscale*400),MT_SIGN)
--				exitsign.target = p.mo
--				exitsign.state = S_SIGN1
--				exitsign.movefactor = p.mo.floorz
--				exitsign.movecount = 1
--			end
--			if p.elim_rejoinEnd then
--				if leveltime > starttime + (el_stime.value*TICRATE) then
--					p.pflags = $|PF_WANTSTOJOIN
--					p.elim_rejoinEnd = false
--				end
--			end
--		end
--		if p.elim_rejoinEnd then
--			p.spectator = true
--		end
--	end
--end end
--
--elim.prevlivepcount = elim.livepcount // Don't use prevlivepcount past this line
--
--if deathcount > 0 then // At least one player died this tic
--	elim.eliminate = false
--	elim.eliminatenow = false
--	if deathcount > 1 then elim.diedName = "Multiple racers" end
--	//print("\x87"..elim.diedName.." got eliminated!")
--
--	for p in players.iterate do if p and p.valid then
--		S_StartSound(nil, sfx_kc48, p)
--		//if elim.livepcount <= 1 then //moved up to win timer config
--			//if not p.spectator then
--				//S_ChangeMusic("KBWIN", false, p) //survived moved up to score calculation
--				//chatprint("\x83<SERVER> "..p.name.." survived!")
--			//else
--				//S_ChangeMusic("KBOK", false, p)
--			//end
--		//end
--
--	end end
--	if el_timescaling.value == 1 then
--		elim.curtime = elim.el_timescaled*TICRATE
--	else	
--		elim.curtime = el_time.value*TICRATE
--	end
--end
--end end)
--
--hud.add(function(v,p,c)
--if p and p.valid then
--if not elim.on then
--	hud.enable("gametypeinfo")
--	hud.enable("freeplay")
--	hud.enable("time")
--end
--if elim.on then
--	hud.disable("gametypeinfo")
--	hud.disable("freeplay")
--	hud.disable("time")
--	local DEBUG_TEST = elim.test
--
--	--x, y, str, font, flags, extra
--	//drawStringMkII(320*FRACUNIT, (200-7)*FRACUNIT, "ELIMINATION", FONT_KART2, V_SNAPTOBOTTOM|V_SNAPTORIGHT, {style=FS_FIXED, scale=FRACUNIT/2, color=3, align="right"})
--
--	/*
--	if splitscreen then // limited support
--		local sx,sy = 320-64, 30
--		drawMKtext("ELM:", sx, sy, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
--
--		local textd = "xx"
--		if elim_wait then textd = "--"
--		else
--			if elim_curtime > -3 then
--				textd = elim_curtime/TICRATE
--			else
--				textd = "TIE '"..((elim_curtime/TICRATE)+10).."'"
--			end
--		end
--		if elim_startpcount <= 1 then textd = "1p" end
--		if elim_win then textd = "end" end
--		drawMKtext(textd, sx, sy+14, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
--	end*/
--
--	local ttx,tty = 270, 4 //248, 10
--
--	local rtext,rcol = "",3
--	local ttext,tcol = "",3
--	if elim.started then // Text mod
--
--		if not elim.sp then
--			local xleft = elim.livepcount.." LEFT"
--			rtext = xleft
--			ttext = string.format("%02d",(elim.curtime / TICRATE))
--
--			if elim.curtime >= 0 and elim.curtime < 10*TICRATE then
--				if (leveltime/4)%2 == 1 then tcol = SKINCOLOR_RED end
--				if elim.curtime < 5*TICRATE  then
--					if (leveltime/6)%3 == 0 then ttext = ">  "..ttext.."  <" end
--					if (leveltime/6)%3 == 1 then ttext = " > "..ttext.." < " end
--					if (leveltime/6)%3 == 2 then ttext = ">  >"..ttext.."<  <" end
--				end
--			end
--			if elim.curtime < 0 then
--				rtext = "OVERTIME"
+ 			end
+ 		end
+ 
+@@ -1196,7 +1153,7 @@
+ 			end
+ 			if elim.curtime < 0 then
+ 				rtext = "OVERTIME"
 -				ttext = (elim.curtime / TICRATE) + el_overtime.value-1 //+9
--
--				rcol = ((leveltime/4)%2 == 1) and SKINCOLOR_RED or SKINCOLOR_RUBY
--				tcol = ((leveltime/4)%2 == 0) and SKINCOLOR_RED or SKINCOLOR_RUBY
--			end
--		else
--			rtext = "WAITING"
--			ttext = "---"
--		end
--
--		if elim.win then
--			rtext = "FINISH"
--			ttext = "---"
--
--			rcol = ((leveltime/4)%2 == 1) and SKINCOLOR_YELLOW or SKINCOLOR_GOLD
--			tcol = ((leveltime/4)%2 == 0) and SKINCOLOR_YELLOW or SKINCOLOR_GOLD
--		end
--
--	else
--		rtext = "PREGAME"
--		if DEBUG_TEST then rtext = "TEST MODE" end
--
--		ttext = "- "..string.format("%02d",(((starttime + el_stime.value*TICRATE) - leveltime)/TICRATE)).." -"
--	end
--
--	// Status
--	drawStringMkII(ttx, tty, rtext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_20TRANS, {color=rcol,align="center"})
--	// Time
--	drawStringMkII(ttx, tty+16, ttext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_10TRANS, {color=tcol,align="center"})
++				ttext = (elim.curtime / TICRATE) + 1 //+9
+ 
+ 				rcol = ((leveltime/4)%2 == 1) and SKINCOLOR_RED or SKINCOLOR_RUBY
+ 				tcol = ((leveltime/4)%2 == 0) and SKINCOLOR_RED or SKINCOLOR_RUBY
+@@ -1225,15 +1182,19 @@
+ 	drawStringMkII(ttx, tty, rtext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_20TRANS, {color=rcol,align="center"})
+ 	// Time
+ 	drawStringMkII(ttx, tty+16, ttext, FONT_KART2, V_SNAPTOTOP|V_SNAPTORIGHT|V_10TRANS, {color=tcol,align="center"})
 -	
 -	if el_announcements.value == 1 then
 -		if elim.diedTimer > 0 then
@@ -2509,348 +584,78 @@ diff -ruN KL_EliminationR2_v1/LUA_EL.txt KL_EliminationR2_v1.strashEdit.r001/LUA
 -			//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
 -		end
 -	end
--
--	local sofmul = 4
--	local maxp = 2*sofmul
--	if not elim.sp and p.pingtime ~= nil and p.pingtime <= maxp then
--		local tflag = V_10TRANS * ((p.pingtime/sofmul) + (9-2))
--		v.draw(0, 0, v.cachePatch("REDSCR"), tflag)
--	end
--	local timestring = string.format("%i'%02i\34%02i",G_TicsToMinutes(p.realtime,true),G_TicsToSeconds(p.realtime),G_TicsToCentiseconds(p.realtime))
--	//v.drawString(320-72, 20, "TIME",V_SNAPTOTOP,"center")
--	v.drawString(ttx,35,timestring,V_SNAPTOTOP|V_SNAPTORIGHT|V_20TRANS,"center")
--	local lastmanflash = 0
--	if p.elimlastmanannounce and p.elimlastmanannounce % 35 > 12 then
--		lastmanflash = V_HUDTRANSHALF
--	end
--	if p.elimlastmanannounce>0 then
--		v.drawString(160,50,"!! LAST MAN STANDING !!",lastmanflash|V_SNAPTOTOP|V_REDMAP,"center")
--	end
--	
--	//replacement for timer on the HUD
--	//drawMKtext(DEBUGDRAW_LASTPOS.."-"..DEBUGDRAW_LASTPOSP, 64, 64, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
--	//drawMKtext((eliminate and "true" or "false"), 64, 64+14, V_SNAPTOTOP|V_SNAPTORIGHT, "center")
--
--	//(eliminate and lastposp == 1) or elim_curtime < -10*TICRATE
--
++	
++	-- [ strashEdit ] --
++	-- Moving this outside this scope
++	-- so that 'Elim_util_printRandomDeathAnnouncement' can work...
++	--if el_announcements.value == 1 then
++	--	if elim.diedTimer > 0 then
++	--		//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
++	--		local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
++	--		printAnnouncement(tsx, tsy)
++	--		//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
++	--	end
++	--end
++	-- --
+ 
+ 	local sofmul = 4
+ 	local maxp = 2*sofmul
+@@ -1258,10 +1219,44 @@
+ 
+ 	//(eliminate and lastposp == 1) or elim_curtime < -10*TICRATE
+ 
 -end
--end
--end, "game")
--
++end
++	-- [ strashEdit ] --
++	if el_announcements.value == 1 then
++		if elim.diedTimer > 0 then
++			//local tsx,tsy = 320*(FRACUNIT/2), 40*FRACUNIT + (elim.diedTimer*FRACUNIT/6)
++			local tsx,tsy = 320/2, 25 + (elim.diedTimer/20) //35
++			printAnnouncement(tsx, tsy)
++			//print("printing announcement with tsx, tsy: "+tsx/FRACUNIT+", "+tsy/FRACUNIT)
++		end
++	end
++	-- --
+ end
+ end, "game")
+ 
 -rawset(_G, "Elimination", function(...) //lets other scripts tell if elimination is running
 -	return elim.on
 -end)
 \ No newline at end of file
-diff -ruN KL_EliminationR2_v1/LUA_FNT KL_EliminationR2_v1.strashEdit.r001/LUA_FNT
---- KL_EliminationR2_v1/LUA_FNT	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_FNT	2021-08-15 18:49:08.503290941 +0200
-@@ -0,0 +1,101 @@
-+local cached = false
-+
-+// Run once to cache the whole font
-+hud.add(function(v,p,c)
-+	if cached then return end
-+	
-+	rawset(_G, "FONT_KART2", {monospace = 6})
-+	for i = 0,255 do
-+		local build = string.format("MKFT2%03d", i)
-+		if v.patchExists(build) then
-+			FONT_KART2[i] = v.cachePatch(build)
-+		end
-+	end
-+	
-+	cached = true
-+	
-+end, "game")
-+
-+
-+local styles = {
-+	"FS_SHADOW", // Draws another string right below this (useful for monocolor fonts)
-+	"FS_MONOSPACE", // Fixed width
-+	"FS_FIXED" // Enables scaling and places things in the fixed scale, epic!
-+}
-+for i = 1,#styles do
-+	rawset(_G, styles[i], 2^(i-1))
-+end
-+
-+hud.add(function(v, p, c)
-+    if drawStringMkII return end
-+    
-+    rawset(_G, "drawStringMkII", function(x, y, str, font, flags, extra) // color, style, flags, align)
-+		local style,align,color,scale
-+		if extra ~= nil then
-+			color = extra.color
-+			style = extra.style
-+			//flags = extra.flags
-+			align = extra.align
-+			scale = extra.scale
-+		end
-+        //if str == "" then str = "-" end // Necessary even?
-+		if str == true then str = "true" end
-+		if str == false then str = "false" end
-+		if type(str) == "number" then str = tostring(str) end
-+		if type(str) ~= "string" then str = type(str) end
-+		
-+		if style == nil then style = 0 end
-+		if color == nil then color = 0 end
-+		if scale == nil then scale = FRACUNIT end
-+		
-+		if type(color) ~= "table" then
-+			color = {color}
-+		end
-+		
-+        local dt = {}
-+        local offset = 0
-+		local mono = font.monospace
-+        for i = 1,#str do
-+            local by = string.byte(str:sub(i,i))
-+            if font[by] ~= nil then
-+                dt[#dt+1] = {font[by], offset}
-+				local ew = font[by].width
-+				if (style & FS_MONOSPACE) then ew = mono end
-+				if (style & FS_FIXED) then ew = FixedMul(ew*FRACUNIT, scale) end
-+				-- FixedMul(ew*FRACUNIT, scale)
-+                offset = $ + ew
-+            else
-+				if (style & FS_FIXED) then mono = FixedMul(mono*FRACUNIT, scale) end
-+                offset = $ + mono
-+            end
-+        end
-+
-+        local eo = 0
-+        if align == "center" then
-+            eo = offset/2
-+        end
-+        if align == "right" then
-+            eo = offset
-+        end
-+		
-+		local colormaps = {}
-+		for i = 1,#color do
-+			colormaps[i] = v.getColormap(-1, color[i])
-+		end
-+		
-+        for i = 1,#dt do
-+            local ix = dt[i]
-+			
-+			if (style & FS_SHADOW) then
-+				--v.draw(x+ix[2]-eo+1, y+1, ix[1], flags, colormaps[2])
-+			end
-+            --v.draw(x+ix[2]-eo, y, ix[1], flags, colormaps[1])
-+			if (style & FS_FIXED) then
-+				v.drawScaled(x+ix[2]-eo, y, scale, ix[1], flags, colormaps[1])
-+			else
-+				v.draw(x+ix[2]-eo, y, ix[1], flags, colormaps[1])
-+			end
-+			--v.drawScaled(x+ix[2]-eo, y, ix[1], flags, colormaps[1])
-+        end
-+    end)
++rawset(_G, "Elimination", function(...) //lets other scripts tell if elimination is running
++	return elim.on
 +end)
++
++
++-- [ strashEdit ]
++-- for outside scripts that may call 'G_Exitlevel' or 'exitlevel' by themselves
++-- so that they can respawn back eliminated players
++rawset(_G, "Elim_respawnEliminatedPlayers", _respawnEliminatedPlayers)
++rawset(_G, "Elim_endWinRound", _endElimRound)
++
++rawset(_G, "Elim_util_printRandomDeathAnnouncement", function(playerName)
++	chosenAnnouncement = P_RandomRange(1, table.getn(announcements))
++	elim.diedName = playerName
++	elim.diedTimer = 5*TICRATE
++end)
++rawset(_G, "Elim_util_diedTimerTic", function()
++	if elim.diedTimer>0 then
++		elim.diedTimer= $-1
++	end
++	return elim.diedTimer
++end)
++rawset(_G, "Elim_util_started", function()
++	return elim.started
++end)
++-- --
++	
 \ No newline at end of file
-diff -ruN KL_EliminationR2_v1/LUA_FNT.txt KL_EliminationR2_v1.strashEdit.r001/LUA_FNT.txt
---- KL_EliminationR2_v1/LUA_FNT.txt	2021-08-12 10:47:17.296511568 +0200
-+++ KL_EliminationR2_v1.strashEdit.r001/LUA_FNT.txt	1970-01-01 01:00:00.000000000 +0100
-@@ -1,101 +0,0 @@
--local cached = false
--
--// Run once to cache the whole font
--hud.add(function(v,p,c)
--	if cached then return end
--	
--	rawset(_G, "FONT_KART2", {monospace = 6})
--	for i = 0,255 do
--		local build = string.format("MKFT2%03d", i)
--		if v.patchExists(build) then
--			FONT_KART2[i] = v.cachePatch(build)
--		end
--	end
--	
--	cached = true
--	
--end, "game")
--
--
--local styles = {
--	"FS_SHADOW", // Draws another string right below this (useful for monocolor fonts)
--	"FS_MONOSPACE", // Fixed width
--	"FS_FIXED" // Enables scaling and places things in the fixed scale, epic!
--}
--for i = 1,#styles do
--	rawset(_G, styles[i], 2^(i-1))
--end
--
--hud.add(function(v, p, c)
--    if drawStringMkII return end
--    
--    rawset(_G, "drawStringMkII", function(x, y, str, font, flags, extra) // color, style, flags, align)
--		local style,align,color,scale
--		if extra ~= nil then
--			color = extra.color
--			style = extra.style
--			//flags = extra.flags
--			align = extra.align
--			scale = extra.scale
--		end
--        //if str == "" then str = "-" end // Necessary even?
--		if str == true then str = "true" end
--		if str == false then str = "false" end
--		if type(str) == "number" then str = tostring(str) end
--		if type(str) ~= "string" then str = type(str) end
--		
--		if style == nil then style = 0 end
--		if color == nil then color = 0 end
--		if scale == nil then scale = FRACUNIT end
--		
--		if type(color) ~= "table" then
--			color = {color}
--		end
--		
--        local dt = {}
--        local offset = 0
--		local mono = font.monospace
--        for i = 1,#str do
--            local by = string.byte(str:sub(i,i))
--            if font[by] ~= nil then
--                dt[#dt+1] = {font[by], offset}
--				local ew = font[by].width
--				if (style & FS_MONOSPACE) then ew = mono end
--				if (style & FS_FIXED) then ew = FixedMul(ew*FRACUNIT, scale) end
--				-- FixedMul(ew*FRACUNIT, scale)
--                offset = $ + ew
--            else
--				if (style & FS_FIXED) then mono = FixedMul(mono*FRACUNIT, scale) end
--                offset = $ + mono
--            end
--        end
--
--        local eo = 0
--        if align == "center" then
--            eo = offset/2
--        end
--        if align == "right" then
--            eo = offset
--        end
--		
--		local colormaps = {}
--		for i = 1,#color do
--			colormaps[i] = v.getColormap(-1, color[i])
--		end
--		
--        for i = 1,#dt do
--            local ix = dt[i]
--			
--			if (style & FS_SHADOW) then
--				--v.draw(x+ix[2]-eo+1, y+1, ix[1], flags, colormaps[2])
--			end
--            --v.draw(x+ix[2]-eo, y, ix[1], flags, colormaps[1])
--			if (style & FS_FIXED) then
--				v.drawScaled(x+ix[2]-eo, y, scale, ix[1], flags, colormaps[1])
--			else
--				v.draw(x+ix[2]-eo, y, ix[1], flags, colormaps[1])
--			end
--			--v.drawScaled(x+ix[2]-eo, y, ix[1], flags, colormaps[1])
--        end
--    end)
--end)
-\ No newline at end of file
-Binary files KL_EliminationR2_v1/MKFT2033 and KL_EliminationR2_v1.strashEdit.r001/MKFT2033 differ
-Binary files KL_EliminationR2_v1/MKFT2033.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2033.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2034 and KL_EliminationR2_v1.strashEdit.r001/MKFT2034 differ
-Binary files KL_EliminationR2_v1/MKFT2034.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2034.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2039 and KL_EliminationR2_v1.strashEdit.r001/MKFT2039 differ
-Binary files KL_EliminationR2_v1/MKFT2039.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2039.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2044 and KL_EliminationR2_v1.strashEdit.r001/MKFT2044 differ
-Binary files KL_EliminationR2_v1/MKFT2044.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2044.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2045 and KL_EliminationR2_v1.strashEdit.r001/MKFT2045 differ
-Binary files KL_EliminationR2_v1/MKFT2045.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2045.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2046 and KL_EliminationR2_v1.strashEdit.r001/MKFT2046 differ
-Binary files KL_EliminationR2_v1/MKFT2046.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2046.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2047 and KL_EliminationR2_v1.strashEdit.r001/MKFT2047 differ
-Binary files KL_EliminationR2_v1/MKFT2047.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2047.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2048 and KL_EliminationR2_v1.strashEdit.r001/MKFT2048 differ
-Binary files KL_EliminationR2_v1/MKFT2048.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2048.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2049 and KL_EliminationR2_v1.strashEdit.r001/MKFT2049 differ
-Binary files KL_EliminationR2_v1/MKFT2049.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2049.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2050 and KL_EliminationR2_v1.strashEdit.r001/MKFT2050 differ
-Binary files KL_EliminationR2_v1/MKFT2050.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2050.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2051 and KL_EliminationR2_v1.strashEdit.r001/MKFT2051 differ
-Binary files KL_EliminationR2_v1/MKFT2051.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2051.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2052 and KL_EliminationR2_v1.strashEdit.r001/MKFT2052 differ
-Binary files KL_EliminationR2_v1/MKFT2052.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2052.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2053 and KL_EliminationR2_v1.strashEdit.r001/MKFT2053 differ
-Binary files KL_EliminationR2_v1/MKFT2053.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2053.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2054 and KL_EliminationR2_v1.strashEdit.r001/MKFT2054 differ
-Binary files KL_EliminationR2_v1/MKFT2054.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2054.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2055 and KL_EliminationR2_v1.strashEdit.r001/MKFT2055 differ
-Binary files KL_EliminationR2_v1/MKFT2055.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2055.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2056 and KL_EliminationR2_v1.strashEdit.r001/MKFT2056 differ
-Binary files KL_EliminationR2_v1/MKFT2056.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2056.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2057 and KL_EliminationR2_v1.strashEdit.r001/MKFT2057 differ
-Binary files KL_EliminationR2_v1/MKFT2057.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2057.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2058 and KL_EliminationR2_v1.strashEdit.r001/MKFT2058 differ
-Binary files KL_EliminationR2_v1/MKFT2058.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2058.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2060 and KL_EliminationR2_v1.strashEdit.r001/MKFT2060 differ
-Binary files KL_EliminationR2_v1/MKFT2060.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2060.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2062 and KL_EliminationR2_v1.strashEdit.r001/MKFT2062 differ
-Binary files KL_EliminationR2_v1/MKFT2062.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2062.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2065 and KL_EliminationR2_v1.strashEdit.r001/MKFT2065 differ
-Binary files KL_EliminationR2_v1/MKFT2065.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2065.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2066 and KL_EliminationR2_v1.strashEdit.r001/MKFT2066 differ
-Binary files KL_EliminationR2_v1/MKFT2066.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2066.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2067 and KL_EliminationR2_v1.strashEdit.r001/MKFT2067 differ
-Binary files KL_EliminationR2_v1/MKFT2067.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2067.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2068 and KL_EliminationR2_v1.strashEdit.r001/MKFT2068 differ
-Binary files KL_EliminationR2_v1/MKFT2068.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2068.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2069 and KL_EliminationR2_v1.strashEdit.r001/MKFT2069 differ
-Binary files KL_EliminationR2_v1/MKFT2069.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2069.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2070 and KL_EliminationR2_v1.strashEdit.r001/MKFT2070 differ
-Binary files KL_EliminationR2_v1/MKFT2070.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2070.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2071 and KL_EliminationR2_v1.strashEdit.r001/MKFT2071 differ
-Binary files KL_EliminationR2_v1/MKFT2071.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2071.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2072 and KL_EliminationR2_v1.strashEdit.r001/MKFT2072 differ
-Binary files KL_EliminationR2_v1/MKFT2072.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2072.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2073 and KL_EliminationR2_v1.strashEdit.r001/MKFT2073 differ
-Binary files KL_EliminationR2_v1/MKFT2073.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2073.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2074 and KL_EliminationR2_v1.strashEdit.r001/MKFT2074 differ
-Binary files KL_EliminationR2_v1/MKFT2074.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2074.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2075 and KL_EliminationR2_v1.strashEdit.r001/MKFT2075 differ
-Binary files KL_EliminationR2_v1/MKFT2075.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2075.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2076 and KL_EliminationR2_v1.strashEdit.r001/MKFT2076 differ
-Binary files KL_EliminationR2_v1/MKFT2076.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2076.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2077 and KL_EliminationR2_v1.strashEdit.r001/MKFT2077 differ
-Binary files KL_EliminationR2_v1/MKFT2077.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2077.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2078 and KL_EliminationR2_v1.strashEdit.r001/MKFT2078 differ
-Binary files KL_EliminationR2_v1/MKFT2078.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2078.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2079 and KL_EliminationR2_v1.strashEdit.r001/MKFT2079 differ
-Binary files KL_EliminationR2_v1/MKFT2079.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2079.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2080 and KL_EliminationR2_v1.strashEdit.r001/MKFT2080 differ
-Binary files KL_EliminationR2_v1/MKFT2080.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2080.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2081 and KL_EliminationR2_v1.strashEdit.r001/MKFT2081 differ
-Binary files KL_EliminationR2_v1/MKFT2081.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2081.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2082 and KL_EliminationR2_v1.strashEdit.r001/MKFT2082 differ
-Binary files KL_EliminationR2_v1/MKFT2082.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2082.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2083 and KL_EliminationR2_v1.strashEdit.r001/MKFT2083 differ
-Binary files KL_EliminationR2_v1/MKFT2083.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2083.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2084 and KL_EliminationR2_v1.strashEdit.r001/MKFT2084 differ
-Binary files KL_EliminationR2_v1/MKFT2084.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2084.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2085 and KL_EliminationR2_v1.strashEdit.r001/MKFT2085 differ
-Binary files KL_EliminationR2_v1/MKFT2085.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2085.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2086 and KL_EliminationR2_v1.strashEdit.r001/MKFT2086 differ
-Binary files KL_EliminationR2_v1/MKFT2086.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2086.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2087 and KL_EliminationR2_v1.strashEdit.r001/MKFT2087 differ
-Binary files KL_EliminationR2_v1/MKFT2087.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2087.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2088 and KL_EliminationR2_v1.strashEdit.r001/MKFT2088 differ
-Binary files KL_EliminationR2_v1/MKFT2088.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2088.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2089 and KL_EliminationR2_v1.strashEdit.r001/MKFT2089 differ
-Binary files KL_EliminationR2_v1/MKFT2089.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2089.lmp differ
-Binary files KL_EliminationR2_v1/MKFT2090 and KL_EliminationR2_v1.strashEdit.r001/MKFT2090 differ
-Binary files KL_EliminationR2_v1/MKFT2090.lmp and KL_EliminationR2_v1.strashEdit.r001/MKFT2090.lmp differ
-Binary files KL_EliminationR2_v1/PLAYSRB2 and KL_EliminationR2_v1.strashEdit.r001/PLAYSRB2 differ
-Binary files KL_EliminationR2_v1/PLAYSRB2.lmp and KL_EliminationR2_v1.strashEdit.r001/PLAYSRB2.lmp differ
-diff -ruN KL_EliminationR2_v1/README KL_EliminationR2_v1.strashEdit.r001/README
---- KL_EliminationR2_v1/README	1970-01-01 01:00:00.000000000 +0100
-+++ KL_EliminationR2_v1.strashEdit.r001/README	2021-08-15 18:49:08.503290941 +0200
-@@ -0,0 +1,132 @@
+diff -ru KL_EliminationR2_v1/README KL_EliminationR2_v1.strashEdit.r001/README
+--- KL_EliminationR2_v1/README	2021-08-21 09:59:27.959016367 +0200
++++ KL_EliminationR2_v1.strashEdit.r001/README	2021-08-21 10:08:48.161675576 +0200
+@@ -1,12 +1,30 @@
+-elimination changelog by freeman (last update 6/7/2021)
 +=== STRASHBOT EDIT ===
 +this version is a tweaked version, by Dr_Nope#0037 of
 +KL_EliminationR1_NJVR_v4.71
@@ -2863,14 +668,15 @@ diff -ruN KL_EliminationR2_v1/README KL_EliminationR2_v1.strashEdit.r001/README
 +
 +
 +elimination changelog by freeman (last update 2/12/2021)
-+original work by Amperbee aka Rapidgame7#1949
-+that version is KL_EliminationR1
-+
+ original work by Amperbee aka Rapidgame7#1949
+ that version is KL_EliminationR1
+ 
+-The NVJR version has been tweaked and poked and prodded at by NVJR players (With permission)
 +The NVJR version has been tweaked and poked and prodded at by NVJR players for about 8 months (With permission)
-+most of the NVJR lifting has been done by freeman#7626
-+here I will make an attempt to document changes away from the default,
-+but there's a lot and i've likely already forgotten half of them
-+
+ most of the NVJR lifting has been done by freeman#7626
+ here I will make an attempt to document changes away from the default,
+ but there's a lot and i've likely already forgotten half of them
+ 
 +2 DO:
 +	RANDOMIZED ROUNDSTART SOUNDS
 +		this should be easy I just need motivation to do it
@@ -2878,91 +684,60 @@ diff -ruN KL_EliminationR2_v1/README KL_EliminationR2_v1.strashEdit.r001/README
 +		im going to hardcode it probably because lazy
 +		UPDATE: lol this has been here for like four months and I still haven't done it
 +
-+CONSOLE VAR: elim_announcements (on/off)
-+	this allows individual clients to turn elim announcments off if they
-+	find they take too much space. just stops announcements from drawing.
-+
-+FORCEWIN COMMAND:
-+	this was set in such a way anyone could use it at anytime
-+	luckily this was fixed before someone else figured it out
-+
-+ELIMINATION() RAWSET:
-+	This is a rawset function that can be and has been used in other scripts to tell if elim is running
-+	It has been tremendously useful to hack other scripts and make them poorly cooperate with elimination if detected
-+
-+NETVARS: elim_timescaling (on/off)
+ CONSOLE VAR: elim_announcements (on/off)
+ 	this allows individual clients to turn elim announcments off if they
+ 	find they take too much space. just stops announcements from drawing.
+@@ -20,8 +38,8 @@
+ 	It has been tremendously useful to hack other scripts and make them poorly cooperate with elimination if detected
+ 
+ NETVARS: elim_timescaling (on/off)
+-	elim_scalingminplayers (1-200)
+-	elim_scalingmaxplayers (1-200)
 +	elim_scalingminplayers (1-16)
 +	elim_scalingmaxplayers (1-16)
-+	elim_scalingmintime (natural)
-+	elim_scalingmaxtime (natural)
-+		these guys all control a scaling function that can be turned on and off with the first command.
-+		if scaling is on the game will try to adjust the elim time between min time and max time
-+		if at or below min players, you get max time. Vice versa for min time and max players.
-+		If between, time is lineraly adjusted between min and max depending on number of players.
-+		the aim is to try and keep game times more consistent even between 3-15 players.
-+	
-+	TODO: maybe it is better to scale the starting time?? but this is harder to do because lmao join in progress
-+	
-+	elim_minplayers (natural)
-+		Elimination rounds won't start unless at least this many players are present (does not count spectators).
+ 	elim_scalingmintime (natural)
+ 	elim_scalingmaxtime (natural)
+ 		these guys all control a scaling function that can be turned on and off with the first command.
+@@ -34,7 +52,7 @@
+ 	
+ 	elim_minplayers (natural)
+ 		Elimination rounds won't start unless at least this many players are present (does not count spectators).
+-		fun fact this is a feature request from aqua's karthouse, thank you based aqua
 +		fun fact this is a feature request from aqua's karthouse
-+
-+	elim_spbgone (0-9999)
-+		If the number of alive players during a round is at or below this level, the SPB is forcibly
-+		disabled through the server's console from rolling. This helps stop the 'died because I rolled SPB
-+		while everyone else got catchup items' issue from manifesting.
-+		This used to be 0-16 but then I made a hardcode client for 32 players and realized maybe 16 isn't the best approach
-+	
-+	elim_lightninggone (on/off)
-+		when SPBgone is triggered, lightning gone will also turn off lightning shields from being rolled if enabled
-+		this was to stop frontrunners from easily rolling a lighting shield in the last few players to save themselves
-+		and also to stop duels from being ended with a lightning shield mash
-+
-+	elim_spbdefault (on/off)
-+		when exiting level during intermission, the SPB will try to be set to this value.
-+		this is so if hosts want to play with SPB off for whatever reason elim doesn't stealth enable it on them
-+
-+ANNOUNCEMENTS:
-+	as mentioned, you can turn them on and off
-+	I dont know how many there were to begin with, but now there's 305. This is a mistake.
-+	announcements are slightly more transparent then normal now.
-+	added a few missing characters but I am awful at spriting so I only added < > and .
-+	MasterFerro#4531 added an ! and ? and cleaned up my sprites
-+
-+SCORING:
-+	an adventure was making eliminated players properly tally in the scoreboard.
-+	This has been achieved through an extremely ugly hack.
-+	players get an eliminated time and eliminated position.
-+		The position is based on how many other players were alive when they died.
-+		The time is the amount of time they spent on the track (p.realtime when they die).
-+	this is all jammed into a calculation which spits out xx'yy"zz
-+	xx = position you died in ; yy = minutes survived ; zz = seconds survived
-+	obviously this isn't perfect but it works and orders players correctly
-+
-+TIME SCALING:
-+	a failsafe against spectating players that added time to the clock had no upper bound.
-+	if a bunch of players died to HP mod/spectated you'd get really long clocks
-+	in order to move things along people spectating or dying only add about 75% of elim_time to the clock
-+	and this time is capped to a max of elim_time, so it speeds things along.
-+		yes this actually screws over the next player if you ragespec but it works
-+
-+CHAT NOTIFICATIONS:
-+	the game will print a chat message detailing who, in what position, and how long they survived when they die
-+	all players still on the map when elim.win is decided will have their name announced in chat
-+
-+WINNING:
-+	player(s) surviving when elim.win is decided say their victory line and spawn a goalpost at their location
-+
-+HUD:
-+	did away with FREEPLAY hud element, the "ELIMINATION" subtext
-+	re-added the game clock as a text render below the elim clock
-+	if the elim clock is below 6 seconds it gets an animated >>>05<<< thing that looks nice
-+	scooched some HUD elements further to the side
-+
-+COMPATABILITY:
-+	GENERAL:
-+		Elimination has a min players and will set the game's laps back to normal after a round
-+		so if elim is turned off, it won't interfere with other mapload hooks if they need
+ 
+ 	elim_spbgone (0-9999)
+ 		If the number of alive players during a round is at or below this level, the SPB is forcibly
+@@ -51,18 +69,6 @@
+ 		when exiting level during intermission, the SPB will try to be set to this value.
+ 		this is so if hosts want to play with SPB off for whatever reason elim doesn't stealth enable it on them
+ 
+-	elim_overtime (natural) [seconds]
+-		controls how long overtime is allowed to last before elim just mcfucking
+-		kills whoever it thinks is last. this is important because of:
+-	
+-	elim_safetynet (natural) [tics]
+-		this is the number of tics someone has to be in last for in order to get
+-		eliminated by the timer without going into overtime. If you haven't been
+-		this number of tics in last, you'll enter into overtime.
+-		Overtime will kill you either when it expires and you're in last, or
+-		when your safetynet expires. You can see how long you have by the
+-		warning markers. If the markers fully close on you, you die.
+-
+ ANNOUNCEMENTS:
+ 	as mentioned, you can turn them on and off
+ 	I dont know how many there were to begin with, but now there's 305. This is a mistake.
+@@ -99,10 +105,28 @@
+ 	re-added the game clock as a text render below the elim clock
+ 	if the elim clock is below 6 seconds it gets an animated >>>05<<< thing that looks nice
+ 	scooched some HUD elements further to the side
+-	got rid of laphand animations; they take up a bunch of space and aren't needed
+ 
+ COMPATABILITY:
+ 	GENERAL:
+ 		Elimination has a min players and will set the game's laps back to normal after a round
+ 		so if elim is turned off, it won't interfere with other mapload hooks if they need
+-		to set them for a specific game mode (i.e frontrun)
+\ No newline at end of file
 +		to set them for a specific game mode (i.e frontrun)
 +	HPMOD:
 +		principally i've tried to make this as flexible as possible with Callmore's HP mod. it works p good.
@@ -2984,118 +759,3 @@ diff -ruN KL_EliminationR2_v1/README KL_EliminationR2_v1.strashEdit.r001/README
 +		there's a very basic crossmod support function that was imitated from acro's crossmod support functions (thank you Angular)
 +		See LUA_CROS
 \ No newline at end of file
-diff -ruN KL_EliminationR2_v1/README.txt KL_EliminationR2_v1.strashEdit.r001/README.txt
---- KL_EliminationR2_v1/README.txt	2021-08-12 10:47:17.296511568 +0200
-+++ KL_EliminationR2_v1.strashEdit.r001/README.txt	1970-01-01 01:00:00.000000000 +0100
-@@ -1,108 +0,0 @@
--elimination changelog by freeman (last update 6/7/2021)
--original work by Amperbee aka Rapidgame7#1949
--that version is KL_EliminationR1
--
--The NVJR version has been tweaked and poked and prodded at by NVJR players (With permission)
--most of the NVJR lifting has been done by freeman#7626
--here I will make an attempt to document changes away from the default,
--but there's a lot and i've likely already forgotten half of them
--
--CONSOLE VAR: elim_announcements (on/off)
--	this allows individual clients to turn elim announcments off if they
--	find they take too much space. just stops announcements from drawing.
--
--FORCEWIN COMMAND:
--	this was set in such a way anyone could use it at anytime
--	luckily this was fixed before someone else figured it out
--
--ELIMINATION() RAWSET:
--	This is a rawset function that can be and has been used in other scripts to tell if elim is running
--	It has been tremendously useful to hack other scripts and make them poorly cooperate with elimination if detected
--
--NETVARS: elim_timescaling (on/off)
--	elim_scalingminplayers (1-200)
--	elim_scalingmaxplayers (1-200)
--	elim_scalingmintime (natural)
--	elim_scalingmaxtime (natural)
--		these guys all control a scaling function that can be turned on and off with the first command.
--		if scaling is on the game will try to adjust the elim time between min time and max time
--		if at or below min players, you get max time. Vice versa for min time and max players.
--		If between, time is lineraly adjusted between min and max depending on number of players.
--		the aim is to try and keep game times more consistent even between 3-15 players.
--	
--	TODO: maybe it is better to scale the starting time?? but this is harder to do because lmao join in progress
--	
--	elim_minplayers (natural)
--		Elimination rounds won't start unless at least this many players are present (does not count spectators).
--		fun fact this is a feature request from aqua's karthouse, thank you based aqua
--
--	elim_spbgone (0-9999)
--		If the number of alive players during a round is at or below this level, the SPB is forcibly
--		disabled through the server's console from rolling. This helps stop the 'died because I rolled SPB
--		while everyone else got catchup items' issue from manifesting.
--		This used to be 0-16 but then I made a hardcode client for 32 players and realized maybe 16 isn't the best approach
--	
--	elim_lightninggone (on/off)
--		when SPBgone is triggered, lightning gone will also turn off lightning shields from being rolled if enabled
--		this was to stop frontrunners from easily rolling a lighting shield in the last few players to save themselves
--		and also to stop duels from being ended with a lightning shield mash
--
--	elim_spbdefault (on/off)
--		when exiting level during intermission, the SPB will try to be set to this value.
--		this is so if hosts want to play with SPB off for whatever reason elim doesn't stealth enable it on them
--
--	elim_overtime (natural) [seconds]
--		controls how long overtime is allowed to last before elim just mcfucking
--		kills whoever it thinks is last. this is important because of:
--	
--	elim_safetynet (natural) [tics]
--		this is the number of tics someone has to be in last for in order to get
--		eliminated by the timer without going into overtime. If you haven't been
--		this number of tics in last, you'll enter into overtime.
--		Overtime will kill you either when it expires and you're in last, or
--		when your safetynet expires. You can see how long you have by the
--		warning markers. If the markers fully close on you, you die.
--
--ANNOUNCEMENTS:
--	as mentioned, you can turn them on and off
--	I dont know how many there were to begin with, but now there's 305. This is a mistake.
--	announcements are slightly more transparent then normal now.
--	added a few missing characters but I am awful at spriting so I only added < > and .
--	MasterFerro#4531 added an ! and ? and cleaned up my sprites
--
--SCORING:
--	an adventure was making eliminated players properly tally in the scoreboard.
--	This has been achieved through an extremely ugly hack.
--	players get an eliminated time and eliminated position.
--		The position is based on how many other players were alive when they died.
--		The time is the amount of time they spent on the track (p.realtime when they die).
--	this is all jammed into a calculation which spits out xx'yy"zz
--	xx = position you died in ; yy = minutes survived ; zz = seconds survived
--	obviously this isn't perfect but it works and orders players correctly
--
--TIME SCALING:
--	a failsafe against spectating players that added time to the clock had no upper bound.
--	if a bunch of players died to HP mod/spectated you'd get really long clocks
--	in order to move things along people spectating or dying only add about 75% of elim_time to the clock
--	and this time is capped to a max of elim_time, so it speeds things along.
--		yes this actually screws over the next player if you ragespec but it works
--
--CHAT NOTIFICATIONS:
--	the game will print a chat message detailing who, in what position, and how long they survived when they die
--	all players still on the map when elim.win is decided will have their name announced in chat
--
--WINNING:
--	player(s) surviving when elim.win is decided say their victory line and spawn a goalpost at their location
--
--HUD:
--	did away with FREEPLAY hud element, the "ELIMINATION" subtext
--	re-added the game clock as a text render below the elim clock
--	if the elim clock is below 6 seconds it gets an animated >>>05<<< thing that looks nice
--	scooched some HUD elements further to the side
--	got rid of laphand animations; they take up a bunch of space and aren't needed
--
--COMPATABILITY:
--	GENERAL:
--		Elimination has a min players and will set the game's laps back to normal after a round
--		so if elim is turned off, it won't interfere with other mapload hooks if they need
--		to set them for a specific game mode (i.e frontrun)
-\ No newline at end of file
-Binary files KL_EliminationR2_v1/REDSCR and KL_EliminationR2_v1.strashEdit.r001/REDSCR differ
-Binary files KL_EliminationR2_v1/REDSCR.lmp and KL_EliminationR2_v1.strashEdit.r001/REDSCR.lmp differ
