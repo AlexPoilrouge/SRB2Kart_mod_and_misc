@@ -37,18 +37,18 @@ rawset(_G, "PartyChecker",
         -- (if player 1 is in party then 1st bit is 1, if p2's in bit n.2 is 1, etc.)
         getParty=
             function(player)
-                return (player.party_flags) and (player.party_flags & 65535) or 0
+                return (player.valid and player.party_flags) and (player.party_flags & 65535) or 0
             end,
         -- function that, for a given player, returns a boolean wether or not this player is in a party
         -- WARNING: may not have been "party checked" yet, so don't forget to check 'isWaitingPartyCheck'
         isInParty=
             function(player)
-                return (player.party_flags~=nil) and ((player.party_flags & 65535)~=0) or false
+                return (player.valid and player.party_flags~=nil) and ((player.party_flags & 65535)~=0) or false
             end,
         -- function that, for a given player, returns a boolean wether or not the "party check" has been made for this player
         isWaitingPartyCheck=
             function(player)
-                return  (player.party_flags==nil) or ((player.party_flags & PC_FLAGS.PARTY_CHECKED)==0)
+                return  (player.valid) and ((player.party_flags==nil) or ((player.party_flags & PC_FLAGS.PARTY_CHECKED)==0))
             end,
         -- function that, for a given player, returns a table containing all the players of his party (including himself)
         -- return empty table if not in a party
